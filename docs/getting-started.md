@@ -10,6 +10,7 @@ fills in the *why* and points to the right reference docs.
 ## Prerequisites
 
 - Python 3.11+ (3.12 or 3.13 recommended)
+- Node.js 20+ and yarn (required to compile the web dashboard — see [Run the server](#run-the-server) below)
 - Docker or Podman with a running daemon (only if you want to use the Docker environment)
 
 ## Install
@@ -29,6 +30,19 @@ The repo is private; clone over SSH (the HTTPS URL above will fail unless you
 have HTTPS credentials configured for github.com).
 
 ## Run the server
+
+Before starting the server, compile the web dashboard (run once, or after any
+`frontend/` change — skip this and `gbserver` has no UI to serve, so every
+`/dashboard/*` route 404s with `{"detail":"Not Found"}`):
+
+```bash
+make build-frontend
+```
+
+This requires Node.js 20+ and yarn. If `yarn` isn't installed, get it via
+`npm install -g yarn` or `corepack enable`.
+
+Then start the server:
 
 ```bash
 gbserver standalone --space-dir configurations/spaces/local
