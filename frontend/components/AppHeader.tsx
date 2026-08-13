@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -31,10 +31,17 @@ import {
 import { useTheme } from "@/hooks/useTheme";
 import styles from "./AppHeader.module.scss";
 
-export function AppHeader() {
+type AppHeaderProps = {
+  isSideNavExpanded: boolean;
+  setIsSideNavExpanded: Dispatch<SetStateAction<boolean>>;
+};
+
+export function AppHeader({
+  isSideNavExpanded,
+  setIsSideNavExpanded,
+}: AppHeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
-  const [isSideNavExpanded, setIsSideNavExpanded] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   useEffect(() => {

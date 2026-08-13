@@ -1,0 +1,16 @@
+@use '@carbon/react/scss/breakpoint' as *;
+
+.content {
+  padding-top: 3rem;
+  padding-left: 3rem;
+
+  @include breakpoint('lg') {
+    transition: padding-left 0.11s cubic-bezier(0.2, 0, 1, 0.9);
+  }
+}
+
+.contentExpanded {
+  @include breakpoint('lg') {
+    padding-left: 16rem;
+  }
+}
