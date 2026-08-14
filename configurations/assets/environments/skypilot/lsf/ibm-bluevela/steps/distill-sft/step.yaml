@@ -1,0 +1,252 @@
+name: distill-sft-step
+version: 1.0.0
+type: training
+config:
+  workload:
+    cwd: "."
+    hf_home: ""
+  gb:
+    mock: false
+    step_contents_in_env: false
+  sft_config:
+    model_path: ""
+    num_train_epochs: 3
+    learning_rate: "2e-5"
+    seed: 42
+    checkpointing_steps: 500
+    output_dir: ""
+outputs:
+  optional:
+    checkpoint:
+      type: model
+
+environment_configs:
+  Skypilot:
+    default_launcher: distill_sft
+    launchers:
+      distill_sft:
+        type: skypilot
+        monitors:
+        - skypilot_monitor
+        config:
+          # VERIFY before the first real run: this is a from-scratch training
+          # loop adapted from the plan doc's §7.2/§7.4 skeletons
+          # (~/code/distillation/granite-agentic-distillation-plan.md), not a
+          # call into open_instruct's finetune.py the way rm-training calls
+          # reward_modeling.py. It has not been run against a real
+          # trajectories input. Confirm the trajectory JSON schema
+          # (`{"messages": [...]}`) below actually matches what
+          # distill-trajgen emits before trusting this.
+          image_id: "docker:us.icr.io/cil15-shared-registry/open-instruct-tuning:0.1.0-conda"
+          run: |
+            set -e
+            echo "=== Distillation Stage 2: SFT on Teacher Trajectories on $(hostname) ==="
+            nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+
+            MODEL_PATH="{{ config.sft_config.model_path }}"
+            OUTPUT_DIR="{{ config.sft_config.output_dir }}"
+            NUM_EPOCHS={{ config.sft_config.num_train_epochs }}
+            LEARNING_RATE="{{ config.sft_config.learning_rate }}"
+            SEED={{ config.sft_config.seed }}
+            CHECKPOINTING_STEPS={{ config.sft_config.checkpointing_steps }}
+
+            # Shared HF hub cache: reuse an already-downloaded model/tokenizer
+            # if present, download and populate it otherwise. Left unset (empty
+            # string) is fine — HF falls back to its own default cache dir.
+            HF_HOME="{{ config.workload.hf_home }}"
+            if [ -n "$HF_HOME" ]; then
+              mkdir -p "$HF_HOME"
+              export HF_HOME
+            fi
+
+            export PYTHONPATH="/stage"
+            export OMP_NUM_THREADS=1
+            export CUDA_DEVICE_ORDER="PCI_BUS_ID"
+            export PYTHONUNBUFFERED=1
+
+            # This step trains on 1 of the 4 GPUs the job gets — deliberate,
+            # not a bug. See distill-sft/README.md and plan doc §4's Stage-2
+            # row (3 idle/available for eval/data-prep concurrently).
+            export CUDA_VISIBLE_DEVICES=0
+
+            # LLMB_BASH_INPUT_TRAJECTORIES-style auto-export is a bash-env
+            # mechanism; on Skypilot the trajectories input is staged to this
+            # path by the launcher. VERIFY the exact env var name against
+            # this environment's actual input-binding convention before
+            # trusting it — this mirrors the bash convention as the best
+            # available guess, not a confirmed Skypilot contract.
+            TRAJECTORIES_DIR="${LLMB_SKYPILOT_INPUT_TRAJECTORIES:-{{ bindings.trajectories.binding.path }}}"
+
+            # Durable storage under OUTPUT_DIR (WORKDIR_ROOT, GPFS on
+            # BlueVela — shared, durable, survives the node disappearing) —
+            # never local NVMe. Checkpointed by step count
+            # (CHECKPOINTING_STEPS, from the profile), not epoch, since an
+            # epoch boundary can be hours away on a preemptible queue — see
+            # lsf-bluevela-4gpu.yaml's own comment and plan doc §5.
+            RUN_ID="${LLMB_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
+            RUN_OUTPUT_DIR="$OUTPUT_DIR/$RUN_ID"
+            mkdir -p "$RUN_OUTPUT_DIR"
+
+            echo "=== Starting SFT on teacher trajectories ==="
+            echo "  Model:         $MODEL_PATH"
+            echo "  Trajectories:  $TRAJECTORIES_DIR"
+            echo "  Output:        $RUN_OUTPUT_DIR"
+            echo "  Epochs:        $NUM_EPOCHS"
+            echo "  Checkpoint every: $CHECKPOINTING_STEPS steps"
+
+            cd /stage
+
+            cat > "$RUN_OUTPUT_DIR/train_sft.py" << 'PYEOF'
+            import argparse
+            import glob
+            import json
+            import os
+            from pathlib import Path
+
+            import torch
+            from torch.utils.data import Dataset
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--model-path", required=True)
+            parser.add_argument("--trajectories-dir", required=True)
+            parser.add_argument("--output-dir", required=True)
+            parser.add_argument("--num-epochs", type=int, required=True)
+            parser.add_argument("--learning-rate", type=float, required=True)
+            parser.add_argument("--seed", type=int, required=True)
+            parser.add_argument("--checkpointing-steps", type=int, required=True)
+            args = parser.parse_args()
+
+            torch.manual_seed(args.seed)
+
+
+            class TrajectorySFTDataset(Dataset):
+                def __init__(self, trajectory_files, tokenizer, max_len=4096):
+                    self.files = trajectory_files
+                    self.tok = tokenizer
+                    self.max_len = max_len
+
+                def __len__(self):
+                    return len(self.files)
+
+                def __getitem__(self, idx):
+                    traj = json.load(open(self.files[idx]))
+                    # Use the model's own chat template so tool-call /
+                    # observation turns are formatted exactly as the student
+                    # will see them at inference time.
+                    text = self.tok.apply_chat_template(
+                        traj["messages"], tokenize=False, add_generation_prompt=False
+                    )
+                    enc = self.tok(
+                        text, truncation=True, max_length=self.max_len, return_tensors="pt"
+                    )
+                    input_ids = enc["input_ids"][0]
+                    return {"input_ids": input_ids, "labels": input_ids.clone()}
+
+
+            def save_checkpoint(out_dir: str, step: int, model, optimizer) -> None:
+                # Async-safe pattern: write to a temp path, then atomic
+                # rename, so a preemption mid-write never leaves a corrupt
+                # checkpoint at the canonical path.
+                ckpt_dir = Path(out_dir) / f"step_{step}"
+                tmp_dir = Path(out_dir) / f"step_{step}.tmp"
+                tmp_dir.mkdir(parents=True, exist_ok=True)
+
+                torch.save(model.state_dict(), tmp_dir / "model.pt")
+                torch.save(optimizer.state_dict(), tmp_dir / "optimizer.pt")
+                torch.save(
+                    {"step": step, "rng_state": torch.get_rng_state()}, tmp_dir / "meta.pt"
+                )
+
+                os.replace(tmp_dir, ckpt_dir)  # atomic on same filesystem
+                (Path(out_dir) / "latest.txt").write_text(str(step))
+
+
+            def load_checkpoint(out_dir: str, model, optimizer) -> int:
+                # Resume path — exercise this under a simulated preemption
+                # before trusting it on a real preemptible run.
+                latest_file = Path(out_dir) / "latest.txt"
+                if not latest_file.exists():
+                    return 0
+                step = int(latest_file.read_text())
+                ckpt_dir = Path(out_dir) / f"step_{step}"
+
+                model.load_state_dict(torch.load(ckpt_dir / "model.pt"))
+                optimizer.load_state_dict(torch.load(ckpt_dir / "optimizer.pt"))
+                meta = torch.load(ckpt_dir / "meta.pt")
+                torch.set_rng_state(meta["rng_state"])
+                return meta["step"]
+
+
+            def main():
+                tok = AutoTokenizer.from_pretrained(args.model_path)
+                model = AutoModelForCausalLM.from_pretrained(
+                    args.model_path, torch_dtype=torch.bfloat16
+                ).cuda()
+
+                trajectory_files = sorted(
+                    glob.glob(os.path.join(args.trajectories_dir, "completed", "*.json"))
+                )
+                if not trajectory_files:
+                    raise RuntimeError(
+                        f"no trajectory files found under {args.trajectories_dir}/completed — "
+                        "check TRAJECTORIES_URI points at a completed distill-trajgen run"
+                    )
+                dataset = TrajectorySFTDataset(trajectory_files, tok)
+                optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+
+                start_step = load_checkpoint(args.output_dir, model, optimizer)
+                print(f"resuming from step {start_step}" if start_step else "starting fresh", flush=True)
+
+                global_step = start_step
+                for epoch in range(args.num_epochs):
+                    for batch in dataset:
+                        if global_step < start_step:
+                            global_step += 1
+                            continue
+
+                        out = model(**{k: v.unsqueeze(0).cuda() for k, v in batch.items()})
+                        out.loss.backward()
+                        optimizer.step()
+                        optimizer.zero_grad()
+
+                        if global_step % args.checkpointing_steps == 0:
+                            save_checkpoint(args.output_dir, global_step, model, optimizer)
+                            print(f"Step: {global_step} loss: {out.loss.item():.4f}", flush=True)
+
+                        global_step += 1
+
+                save_checkpoint(args.output_dir, global_step, model, optimizer)
+                print(f"training complete at step {global_step}", flush=True)
+
+
+            if __name__ == "__main__":
+                main()
+            PYEOF
+
+            python3 "$RUN_OUTPUT_DIR/train_sft.py" \
+              --model-path "$MODEL_PATH" \
+              --trajectories-dir "$TRAJECTORIES_DIR" \
+              --output-dir "$RUN_OUTPUT_DIR" \
+              --num-epochs "$NUM_EPOCHS" \
+              --learning-rate "$LEARNING_RATE" \
+              --seed "$SEED" \
+              --checkpointing-steps "$CHECKPOINTING_STEPS"
+
+            echo "LLMB_ARTIFACT_ID:checkpoint LLMB_ARTIFACT_PATH:${RUN_OUTPUT_DIR}"
+    monitors:
+      skypilot_monitor:
+        ref: space://monitors/skypilot
+        config:
+          poll_interval_seconds: "{{ config.poll_interval_seconds | default(900) }}"
+          log_retrieval:
+            mode: "{{ config.log_retrieval_mode | default('periodic') }}"
+            interval_seconds: "{{ config.log_retrieval_interval_seconds | default(900) }}"
+          extra_event_configs:
+          - event_type: WORKLOAD_STATUS_EVENT
+            line_regex: "Step:\\s\\d+"
+            event_fields:
+              - field_name: status
+                field_value_template: "RUNNING"
+              - field_name: message
+                field_regex: "Step:.+"

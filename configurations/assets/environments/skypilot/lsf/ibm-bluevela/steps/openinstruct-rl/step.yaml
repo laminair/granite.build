@@ -4,6 +4,7 @@ type: training
 config:
   workload:
     cwd: "."
+    hf_home: ""
   gb:
     mock: false
     step_contents_in_env: false
@@ -121,6 +122,15 @@ environment_configs:
             # The SkyPilot LSF backend sets HOME=/, so point HOME at /stage
             # (matches gbansible's bluevela_rl_job HOME=/stage).
             export HOME=/stage
+
+            # Shared HF hub cache: reuse an already-downloaded model/tokenizer
+            # if present, download and populate it otherwise. Left unset (empty
+            # string) is fine — HF falls back to its own default cache dir.
+            HF_HOME="{{ config.workload.hf_home }}"
+            if [ -n "$HF_HOME" ]; then
+              mkdir -p "$HF_HOME"
+              export HF_HOME
+            fi
 
             {% if config.rl_config.code_server_url %}
             export CODE_SERVER_URL="{{ config.rl_config.code_server_url }}"

@@ -1,0 +1,134 @@
+name: rm-training
+version: 1.0.0
+type: training
+config:
+  workload:
+    cwd: "."
+    hf_home: ""
+  gb:
+    mock: false
+    step_contents_in_env: false
+  rm_config:
+    model_path: ""
+    dataset_mixer_list: ""
+    dataset_train_splits: "train"
+    chat_template_name: "tulu"
+    output_dir: ""
+    num_train_epochs: 1
+    per_device_train_batch_size: 8
+    gradient_accumulation_steps: 4
+    learning_rate: "3e-6"
+    lr_scheduler_type: "linear"
+    max_token_length: 2048
+    max_prompt_token_length: 1024
+    seed: 123
+outputs:
+  optional:
+    checkpoint:
+      type: model
+
+environment_configs:
+  Skypilot:
+    default_launcher: rm
+    launchers:
+      rm:
+        type: skypilot
+        monitors:
+        - skypilot_monitor
+        config:
+          # VERIFY: this step targets open_instruct/reward_modeling.py, which is
+          # confirmed to exist in allenai/open-instruct upstream `main` (an
+          # Args/TokenizerConfig/ModelConfig HfArgumentParser-style CLI) but is
+          # NOT confirmed present, at this path, with this CLI, in the pinned
+          # image below. finetune.py is the one entrypoint known to have
+          # diverged from upstream in this exact image family (pinned image
+          # takes --tokenized_data pointing at a pre-tokenized dir with
+          # state.json; upstream main takes --dataset_mixer_list and tokenizes
+          # on the fly) — reward_modeling.py may have forked the same way.
+          # Before the first real run: `python -c
+          # "import open_instruct.reward_modeling"` inside the image, and diff
+          # its argparse surface against upstream before trusting the flags
+          # below. See docs/planning/recipe-roadmap.md for the same caveat.
+          image_id: "docker:us.icr.io/cil15-shared-registry/open-instruct-tuning:0.1.0-conda"
+          run: |
+            set -e
+            echo "=== Open Instruct Reward Model Training on $(hostname) ==="
+            nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+
+            MODEL_PATH="{{ config.rm_config.model_path }}"
+            OUTPUT_DIR="{{ config.rm_config.output_dir }}"
+
+            # Shared HF hub cache: reuse an already-downloaded model/tokenizer
+            # if present, download and populate it otherwise. Left unset (empty
+            # string) is fine — HF falls back to its own default cache dir.
+            HF_HOME="{{ config.workload.hf_home }}"
+            if [ -n "$HF_HOME" ]; then
+              mkdir -p "$HF_HOME"
+              export HF_HOME
+            fi
+
+            export PYTHONPATH="/stage"
+            export OMP_NUM_THREADS=1
+            export CUDA_DEVICE_ORDER="PCI_BUS_ID"
+            export CUDA_MODULE_LOADING="LAZY"
+
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            RUN_OUTPUT_DIR="$OUTPUT_DIR/v0-$(date +%Y%m%d)-${TIMESTAMP}"
+            mkdir -p "$OUTPUT_DIR"
+
+            # SkyPilot sets SKYPILOT_NUM_GPUS_PER_NODE based on the cluster's
+            # actual accelerator count, which reflects ACCELERATORS from the
+            # build's launcher_config. Falling back to nvidia-smi count
+            # handles environments where the env var isn't populated.
+            NUM_GPUS="${SKYPILOT_NUM_GPUS_PER_NODE:-$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)}"
+
+            echo "=== Starting RM training ==="
+            echo "  Model:   $MODEL_PATH"
+            echo "  Output:  $RUN_OUTPUT_DIR"
+            echo "  Epochs:  {{ config.rm_config.num_train_epochs }}"
+            echo "  GPUs:    $NUM_GPUS"
+
+            cd /stage
+            accelerate launch \
+              --mixed_precision bf16 \
+              --num_machines 1 \
+              --num_processes "$NUM_GPUS" \
+              --machine_rank 0 \
+              --main_process_ip localhost \
+              --main_process_port ${MASTER_PORT:-29500} \
+              --config_file /stage/configs/fsdp_accelerate_mamba.yaml \
+              open_instruct/reward_modeling.py \
+              --model_name_or_path "$MODEL_PATH" \
+              --dataset_mixer_list {{ config.rm_config.dataset_mixer_list }} \
+              --dataset_train_splits {{ config.rm_config.dataset_train_splits }} \
+              --chat_template_name {{ config.rm_config.chat_template_name }} \
+              --per_device_train_batch_size {{ config.rm_config.per_device_train_batch_size }} \
+              --gradient_accumulation_steps {{ config.rm_config.gradient_accumulation_steps }} \
+              --learning_rate {{ config.rm_config.learning_rate }} \
+              --lr_scheduler_type {{ config.rm_config.lr_scheduler_type }} \
+              --num_train_epochs {{ config.rm_config.num_train_epochs }} \
+              --max_token_length {{ config.rm_config.max_token_length }} \
+              --max_prompt_token_length {{ config.rm_config.max_prompt_token_length }} \
+              --output_dir "$RUN_OUTPUT_DIR" \
+              --seed {{ config.rm_config.seed }} \
+              --exp_name "gb-rm_${TIMESTAMP}" \
+              --no_push_to_hub \
+              --no_try_launch_beaker_eval_jobs
+
+            echo "LLMB_ARTIFACT_ID:checkpoint LLMB_ARTIFACT_PATH:${RUN_OUTPUT_DIR}"
+    monitors:
+      skypilot_monitor:
+        ref: space://monitors/skypilot
+        config:
+          poll_interval_seconds: "{{ config.poll_interval_seconds | default(900) }}"
+          log_retrieval:
+            mode: "{{ config.log_retrieval_mode | default('periodic') }}"
+            interval_seconds: "{{ config.log_retrieval_interval_seconds | default(900) }}"
+          extra_event_configs:
+          - event_type: WORKLOAD_STATUS_EVENT
+            line_regex: "Step:\\s\\d+"
+            event_fields:
+              - field_name: status
+                field_value_template: "RUNNING"
+              - field_name: message
+                field_regex: "Step:.+"

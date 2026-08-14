@@ -4,6 +4,7 @@ type: EVAL
 config:
   workload:
     cwd: "."
+    hf_home: ""
   gb:
     mock: false
     step_contents_in_env: false
@@ -48,6 +49,16 @@ environment_configs:
             export NUM_GPUS_GENERATE={{ config.bfcl_config.num_gpus_generate }}
             export NUM_GPUS_EVALUATE={{ config.bfcl_config.num_gpus_evaluate }}
             export GPU_MEMORY_UTILIZATION="{{ config.bfcl_config.gpu_memory_utilization }}"
+
+            # Shared HF hub cache: reuse an already-downloaded model/tokenizer
+            # if present, download and populate it otherwise. Left unset (empty
+            # string) is fine — HF falls back to its own default cache dir.
+            HF_HOME="{{ config.workload.hf_home }}"
+            if [ -n "$HF_HOME" ]; then
+              mkdir -p "$HF_HOME"
+              export HF_HOME
+            fi
+
             export VLLM_PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
             export VLLM_WORKER_MULTIPROC_METHOD=spawn
             export VLLM_SKIP_P2P_CHECK=1

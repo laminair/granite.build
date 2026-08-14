@@ -1,0 +1,126 @@
+name: data-tokenize
+version: v1
+type: custom
+config:
+  tokenize_config:
+    build_name: "tokenize"
+    tokenizer_name_or_path: "ibm-granite/granite-4.0-350m-base"
+    hf_token: ""
+    dataset_mixer_list: ""
+    dataset_splits: "train"
+    max_seq_length: "8192"
+    chat_template_name: "tulu"
+    output_s3_uri: "s3://granite-build-datasets/tokenized"
+    add_bos: "false"
+    seed: "123"
+inputs: {}
+outputs:
+  optional:
+    tokenized_dataset:
+      type: dataset
+environment_configs:
+  Skypilot:
+    default_launcher: data-tokenize
+    launchers:
+      data-tokenize:
+        type: skypilot
+        monitors:
+        - skypilot_monitor
+        config:
+          # VERIFY before the first real run: targets
+          # open_instruct/dataset_transformation.py's CLI entrypoint
+          # (`python open_instruct/dataset_transformation.py ...`), the same
+          # module openinstruct-sft's setup step patches
+          # (`keep_in_memory=True` -> `False`) for the pre-tokenized-dataset
+          # path it consumes via --tokenized_data. Confirm this module
+          # exposes a standalone CLI (not just library functions called from
+          # finetune.py) inside the pinned image before trusting this.
+          image_id: "docker:022767362696.dkr.ecr.us-east-2.amazonaws.com/granite-build/open-instruct-tuning:0.1.0-conda"
+          resources:
+            infra: aws/us-east-2
+            accelerators: ""
+            memory: "64+"
+            disk_size: 256
+            cpus: "8+"
+          file_mounts:
+            /output:
+              source: "{{ config.tokenize_config.output_s3_uri }}"
+              mode: MOUNT
+          envs:
+            TOKENIZER_NAME_OR_PATH: "{{ config.tokenize_config.tokenizer_name_or_path }}"
+            HF_TOKEN: "{{ config.tokenize_config.hf_token }}"
+            DATASET_MIXER_LIST: "{{ config.tokenize_config.dataset_mixer_list }}"
+            DATASET_SPLITS: "{{ config.tokenize_config.dataset_splits }}"
+            MAX_SEQ_LENGTH: "{{ config.tokenize_config.max_seq_length }}"
+            CHAT_TEMPLATE_NAME: "{{ config.tokenize_config.chat_template_name }}"
+            OUTPUT_DIR: "/output/{{ config.tokenize_config.build_name }}"
+            ADD_BOS: "{{ config.tokenize_config.add_bos }}"
+            SEED: "{{ config.tokenize_config.seed }}"
+          setup: |
+            source deactivate 2>/dev/null || true
+            export PATH=/opt/miniconda3/bin:$PATH
+
+            echo "=== Environment Check ==="
+            python -c "import transformers; print(f'transformers {transformers.__version__}')"
+
+            if [[ -n "${HF_TOKEN}" ]]; then
+              huggingface-cli login --token "${HF_TOKEN}"
+            fi
+          run: |
+            set -eo pipefail
+            source deactivate 2>/dev/null || true
+            export PATH=/opt/miniconda3/bin:$PATH
+            export PYTHONPATH=/stage:$PYTHONPATH
+            cd /stage
+
+            timestamp=$(date +"%Y%m%d_%H%M%S")
+            OUTPUT_DATA_PATH="${OUTPUT_DIR}/v0-${timestamp}"
+            mkdir -p "${OUTPUT_DATA_PATH}" 2>/dev/null || true
+
+            echo "[$(date)] Starting dataset tokenization"
+            echo "[$(date)] Tokenizer: ${TOKENIZER_NAME_OR_PATH}"
+            echo "[$(date)] Output: ${OUTPUT_DATA_PATH}"
+
+            TOKENIZE_ARGS=(
+              open_instruct/dataset_transformation.py
+              --dataset_mixer_list "${DATASET_MIXER_LIST}"
+              --dataset_splits "${DATASET_SPLITS}"
+              --tokenizer_name_or_path "${TOKENIZER_NAME_OR_PATH}"
+              --chat_template_name "${CHAT_TEMPLATE_NAME}"
+              --max_seq_length "${MAX_SEQ_LENGTH}"
+              --output_dir "${OUTPUT_DATA_PATH}"
+              --seed "${SEED}"
+            )
+
+            [[ "${ADD_BOS}" == "true" ]] && TOKENIZE_ARGS+=(--add_bos)
+
+            python "${TOKENIZE_ARGS[@]}" 2>&1 | tee "${OUTPUT_DATA_PATH}/tokenize.log"
+
+            echo "[$(date)] Tokenization complete. Output at: ${OUTPUT_DATA_PATH}"
+            echo "LLMB_ARTIFACT_ID:tokenized_dataset LLMB_ARTIFACT_PATH:${OUTPUT_DATA_PATH}"
+    monitors:
+      skypilot_monitor:
+        type: skypilot_monitor
+        config:
+          poll_interval_seconds: 30
+          event_configs:
+          - event_type: TERMINATE_EVENT
+            line_regex: "ValueError:"
+            is_json: False
+            event_fields:
+              - field_name: msg
+                field_regex: ".*"
+          - event_type: TERMINATE_EVENT
+            line_regex: "HFValidationError:"
+            is_json: False
+            event_fields:
+              - field_name: msg
+                field_regex: ".*"
+          - event_type: WORKLOAD_STATUS_EVENT
+            line_regex: "Tokenization complete"
+            event_fields:
+              - field_name: status
+                field_value_template: "RUNNING"
+              - field_name: message
+                field_regex: "Tokenization complete.*"
+                is_data: True
