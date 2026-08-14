@@ -4,6 +4,7 @@ type: training
 config:
   workload:
     cwd: "."
+    hf_home: ""
   gb:
     mock: false
     step_contents_in_env: false
@@ -55,6 +56,15 @@ environment_configs:
             if [ ! -f "$DATASET_DIR/state.json" ]; then
               echo "ERROR: Dataset not found at $DATASET_DIR"
               exit 1
+            fi
+
+            # Shared HF hub cache: reuse an already-downloaded model/tokenizer
+            # if present, download and populate it otherwise. Left unset (empty
+            # string) is fine — HF falls back to its own default cache dir.
+            HF_HOME="{{ config.workload.hf_home }}"
+            if [ -n "$HF_HOME" ]; then
+              mkdir -p "$HF_HOME"
+              export HF_HOME
             fi
 
             export PYTHONPATH="/stage"

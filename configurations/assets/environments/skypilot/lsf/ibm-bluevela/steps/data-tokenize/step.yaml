@@ -1,0 +1,99 @@
+name: data-tokenize
+version: 1.0.0
+type: training
+config:
+  workload:
+    cwd: "."
+    hf_home: ""
+  gb:
+    mock: false
+    step_contents_in_env: false
+  tokenize_config:
+    tokenizer_name_or_path: ""
+    dataset_mixer_list: ""
+    dataset_splits: "train"
+    max_seq_length: 8192
+    chat_template_name: "tulu"
+    output_dir: ""
+    add_bos: false
+    seed: 123
+outputs:
+  optional:
+    tokenized_dataset:
+      type: dataset
+
+environment_configs:
+  Skypilot:
+    default_launcher: tokenize
+    launchers:
+      tokenize:
+        type: skypilot
+        monitors:
+        - skypilot_monitor
+        config:
+          # VERIFY: same open_instruct/dataset_transformation.py CLI as the
+          # AWS copy of this step — see that file's identical caveat about
+          # confirming a standalone CLI entrypoint exists in the pinned image
+          # before trusting this. CPU-only step; no GPU resources requested.
+          image_id: "docker:us.icr.io/cil15-shared-registry/open-instruct-tuning:0.1.0-conda"
+          run: |
+            set -e
+            echo "=== Open Instruct Dataset Tokenization on $(hostname) ==="
+
+            TOKENIZER_NAME_OR_PATH="{{ config.tokenize_config.tokenizer_name_or_path }}"
+            OUTPUT_DIR="{{ config.tokenize_config.output_dir }}"
+
+            # Shared HF hub cache: reuse an already-downloaded tokenizer/dataset
+            # if present, download and populate it otherwise. Left unset (empty
+            # string) is fine — HF falls back to its own default cache dir.
+            HF_HOME="{{ config.workload.hf_home }}"
+            if [ -n "$HF_HOME" ]; then
+              mkdir -p "$HF_HOME"
+              export HF_HOME
+            fi
+
+            export PYTHONPATH="/stage"
+
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            RUN_OUTPUT_DIR="$OUTPUT_DIR/v0-$(date +%Y%m%d)-${TIMESTAMP}"
+            mkdir -p "$OUTPUT_DIR"
+
+            echo "=== Starting dataset tokenization ==="
+            echo "  Tokenizer: $TOKENIZER_NAME_OR_PATH"
+            echo "  Output:    $RUN_OUTPUT_DIR"
+
+            cd /stage
+            TOKENIZE_ARGS=(
+              open_instruct/dataset_transformation.py
+              --dataset_mixer_list {{ config.tokenize_config.dataset_mixer_list }}
+              --dataset_splits {{ config.tokenize_config.dataset_splits }}
+              --tokenizer_name_or_path "$TOKENIZER_NAME_OR_PATH"
+              --chat_template_name {{ config.tokenize_config.chat_template_name }}
+              --max_seq_length {{ config.tokenize_config.max_seq_length }}
+              --output_dir "$RUN_OUTPUT_DIR"
+              --seed {{ config.tokenize_config.seed }}
+            )
+
+            {% if config.tokenize_config.add_bos %}
+            TOKENIZE_ARGS+=(--add_bos)
+            {% endif %}
+
+            python "${TOKENIZE_ARGS[@]}"
+
+            echo "LLMB_ARTIFACT_ID:tokenized_dataset LLMB_ARTIFACT_PATH:${RUN_OUTPUT_DIR}"
+    monitors:
+      skypilot_monitor:
+        ref: space://monitors/skypilot
+        config:
+          poll_interval_seconds: "{{ config.poll_interval_seconds | default(300) }}"
+          log_retrieval:
+            mode: "{{ config.log_retrieval_mode | default('periodic') }}"
+            interval_seconds: "{{ config.log_retrieval_interval_seconds | default(300) }}"
+          extra_event_configs:
+          - event_type: WORKLOAD_STATUS_EVENT
+            line_regex: "Starting dataset tokenization"
+            event_fields:
+              - field_name: status
+                field_value_template: "RUNNING"
+              - field_name: message
+                field_value_template: "tokenizing"

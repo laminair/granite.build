@@ -1,0 +1,2 @@
+# Apple Silicon + Metal only — mlx/mlx-lm do not install or run anywhere else.
+mlx-lm

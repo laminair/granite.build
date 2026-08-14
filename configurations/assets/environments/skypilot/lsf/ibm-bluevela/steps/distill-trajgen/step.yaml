@@ -1,0 +1,225 @@
+name: distill-trajgen-step
+version: 1.0.0
+type: training
+config:
+  workload:
+    cwd: "."
+    hf_home: ""
+  gb:
+    mock: false
+    step_contents_in_env: false
+  trajgen_config:
+    teacher_model_path: ""
+    task_dataset: ""
+    num_teacher_replicas: 2
+    tensor_parallel_size: 2
+    output_dir: ""
+outputs:
+  optional:
+    trajectories:
+      type: dataset
+
+environment_configs:
+  Skypilot:
+    default_launcher: trajgen
+    launchers:
+      trajgen:
+        type: skypilot
+        monitors:
+        - skypilot_monitor
+        config:
+          # VERIFY before the first real run: this step assumes a vLLM-served
+          # teacher and a run_agent_task(task, model_client) function from an
+          # existing tool/agent harness, per the plan doc's §7.1 skeleton
+          # (~/code/distillation/granite-agentic-distillation-plan.md). Neither
+          # is confirmed to exist at this path, in this image, with this CLI —
+          # confirm both before trusting the flags/imports below. The harness
+          # import below (distill_harness.run_agent_task) is a placeholder
+          # name; replace it with whatever the real harness actually exposes.
+          #
+          # Teacher access: ibm-granite/granite-4.2-30b is confirmed internal
+          # pre-release, not public (see docs/planning/e2e-agentic-pipeline.md's
+          # 2026-08-14 correction) — this step will fail to pull the model for
+          # anyone without that access, not just anyone missing HF_TOKEN.
+          image_id: "docker:us.icr.io/cil15-shared-registry/open-instruct-tuning:0.1.0-conda"
+          run: |
+            set -e
+            echo "=== Distillation Stage 1: Teacher Trajectory Generation on $(hostname) ==="
+            nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+
+            TEACHER_MODEL_PATH="{{ config.trajgen_config.teacher_model_path }}"
+            TASK_DATASET="{{ config.trajgen_config.task_dataset }}"
+            NUM_REPLICAS={{ config.trajgen_config.num_teacher_replicas }}
+            TP_SIZE={{ config.trajgen_config.tensor_parallel_size }}
+            OUTPUT_DIR="{{ config.trajgen_config.output_dir }}"
+
+            # Shared HF hub cache: reuse an already-downloaded model/tokenizer
+            # if present, download and populate it otherwise. Left unset (empty
+            # string) is fine — HF falls back to its own default cache dir.
+            HF_HOME="{{ config.workload.hf_home }}"
+            if [ -n "$HF_HOME" ]; then
+              mkdir -p "$HF_HOME"
+              export HF_HOME
+            fi
+
+            export PYTHONPATH="/stage"
+            export VLLM_WORKER_MULTIPROC_METHOD=spawn
+            export VLLM_SKIP_P2P_CHECK=1
+            export NCCL_IGNORE_DISABLED_P2P=1
+            export PYTHONUNBUFFERED=1
+
+            # Durable storage lives under OUTPUT_DIR (WORKDIR_ROOT, GPFS on
+            # BlueVela — shared, durable, survives the node disappearing) —
+            # never local NVMe. A restart after preemption only sees prior
+            # work if it's off-node; see plan doc §5. Lineage: this run's
+            # manifest/trajectory dir is keyed by RUN_ID so which task batch
+            # produced which trajectory set is recoverable from the path
+            # alone, not out-of-band notes.
+            RUN_ID="${LLMB_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
+            RUN_OUTPUT_DIR="$OUTPUT_DIR/$RUN_ID"
+            mkdir -p "$RUN_OUTPUT_DIR"
+
+            echo "=== Starting trajectory generation ==="
+            echo "  Teacher:      $TEACHER_MODEL_PATH"
+            echo "  Task dataset: $TASK_DATASET"
+            echo "  Replicas:     $NUM_REPLICAS x TP=$TP_SIZE"
+            echo "  Output:       $RUN_OUTPUT_DIR"
+
+            cd /stage
+
+            # Two teacher replicas, each TP=$TP_SIZE, colocated on this node's
+            # 4 GPUs (2 replicas x TP=2 = 4) per plan doc §4's Stage-1 row.
+            # CUDA_VISIBLE_DEVICES splits the node's GPUs between replicas;
+            # each vLLM server binds its own port so the harness can round-robin.
+            REPLICA_PORTS=()
+            REPLICA_PIDS=()
+            for i in $(seq 0 $((NUM_REPLICAS - 1))); do
+              PORT=$((8000 + i))
+              GPU_START=$((i * TP_SIZE))
+              GPU_LIST=$(seq -s, "$GPU_START" $((GPU_START + TP_SIZE - 1)))
+              echo "  Launching teacher replica $i on GPUs $GPU_LIST, port $PORT"
+              CUDA_VISIBLE_DEVICES="$GPU_LIST" python3 -m vllm.entrypoints.openai.api_server \
+                --model "$TEACHER_MODEL_PATH" \
+                --tensor-parallel-size "$TP_SIZE" \
+                --port "$PORT" \
+                > "$RUN_OUTPUT_DIR/teacher_replica_${i}.log" 2>&1 &
+              REPLICA_PIDS+=($!)
+              REPLICA_PORTS+=("$PORT")
+            done
+
+            # Wait for all replicas to report ready before starting generation —
+            # a harness call against a not-yet-ready server is indistinguishable
+            # from a hung task otherwise.
+            for PORT in "${REPLICA_PORTS[@]}"; do
+              for _ in $(seq 1 60); do
+                curl -sf "http://localhost:$PORT/health" > /dev/null 2>&1 && break
+                sleep 10
+              done
+            done
+
+            cat > "$RUN_OUTPUT_DIR/generate_trajectories.py" << 'PYEOF'
+            import argparse
+            import json
+            import os
+            from pathlib import Path
+
+            # VERIFY: placeholder harness import — replace with the real
+            # tool/agent environment's module before trusting this step.
+            from distill_harness import build_model_client, load_task_dataset, run_agent_task
+
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--teacher-ports", required=True, help="comma-separated vLLM server ports")
+            parser.add_argument("--task-dataset", required=True)
+            parser.add_argument("--output-dir", required=True)
+            args = parser.parse_args()
+
+            OUTPUT_DIR = Path(args.output_dir)
+            MANIFEST_PATH = OUTPUT_DIR / "manifest.jsonl"
+            TRAJ_DIR = OUTPUT_DIR / "completed"
+            TRAJ_DIR.mkdir(parents=True, exist_ok=True)
+
+
+            def load_completed_task_ids() -> set[str]:
+                # Resumability: skip tasks we already have a durable trajectory
+                # for. A restarted job (after preemption) reads this before
+                # doing any work.
+                if not MANIFEST_PATH.exists():
+                    return set()
+                with open(MANIFEST_PATH) as f:
+                    return {json.loads(line)["task_id"] for line in f if line.strip()}
+
+
+            def write_trajectory_durably(task_id: str, trajectory: dict) -> None:
+                # Write-then-manifest, in that order, so a crash between the
+                # two just means a redundant task_id shows up in a re-scan —
+                # never a silent loss.
+                out_path = TRAJ_DIR / f"{task_id}.json"
+                tmp_path = out_path.with_suffix(".tmp")
+                with open(tmp_path, "w") as f:
+                    json.dump(trajectory, f)
+                os.replace(tmp_path, out_path)  # atomic on same filesystem
+
+                with open(MANIFEST_PATH, "a") as f:
+                    f.write(json.dumps({"task_id": task_id}) + "\n")
+
+
+            def main():
+                ports = args.teacher_ports.split(",")
+                clients = [build_model_client(f"http://localhost:{p}") for p in ports]
+                tasks = load_task_dataset(args.task_dataset)
+
+                done = load_completed_task_ids()
+                pending = [t for t in tasks if t["task_id"] not in done]
+                print(f"{len(done)} already done, {len(pending)} remaining", flush=True)
+
+                for i, task in enumerate(pending):
+                    client = clients[i % len(clients)]
+                    try:
+                        trajectory = run_agent_task(task, client)
+                        # Deliberately keep trajectories where a tool call
+                        # failed and the teacher recovered — filtering to only
+                        # clean first-try successes is the single most common
+                        # way this stage silently produces a distillation set
+                        # that can't teach recovery.
+                        write_trajectory_durably(task["task_id"], trajectory)
+                    except Exception as e:
+                        # Log and move on — a single bad task must not take
+                        # down the batch, and must not be silently marked
+                        # done either.
+                        print(f"task {task['task_id']} failed: {e}", flush=True)
+                        continue
+
+                print(f"trajectory generation complete: {len(pending)} processed this run", flush=True)
+
+
+            if __name__ == "__main__":
+                main()
+            PYEOF
+
+            TEACHER_PORTS=$(IFS=,; echo "${REPLICA_PORTS[*]}")
+            python3 "$RUN_OUTPUT_DIR/generate_trajectories.py" \
+              --teacher-ports "$TEACHER_PORTS" \
+              --task-dataset "$TASK_DATASET" \
+              --output-dir "$RUN_OUTPUT_DIR"
+
+            for PID in "${REPLICA_PIDS[@]}"; do
+              kill "$PID" 2>/dev/null || true
+            done
+
+            echo "LLMB_ARTIFACT_ID:trajectories LLMB_ARTIFACT_PATH:${RUN_OUTPUT_DIR}"
+    monitors:
+      skypilot_monitor:
+        ref: space://monitors/skypilot
+        config:
+          poll_interval_seconds: "{{ config.poll_interval_seconds | default(900) }}"
+          log_retrieval:
+            mode: "{{ config.log_retrieval_mode | default('periodic') }}"
+            interval_seconds: "{{ config.log_retrieval_interval_seconds | default(900) }}"
+          extra_event_configs:
+          - event_type: WORKLOAD_STATUS_EVENT
+            line_regex: "already done, \\d+ remaining"
+            event_fields:
+              - field_name: status
+                field_value_template: "RUNNING"
+              - field_name: message
+                field_regex: ".*already done.*remaining"
