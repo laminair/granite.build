@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Theme } from "@carbon/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useTheme } from "@/hooks/useTheme";
 import { AppHeader } from "@/components/AppHeader";
+import styles from "@/components/ClientShell.module.scss";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,13 +39,23 @@ function useDeepLinkRedirect() {
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
+  const [isSideNavExpanded, setIsSideNavExpanded] = useState(false);
   useDeepLinkRedirect();
 
   return (
     <>
-      <AppHeader />
+      <AppHeader
+        isSideNavExpanded={isSideNavExpanded}
+        setIsSideNavExpanded={setIsSideNavExpanded}
+      />
       <Theme theme={theme}>
-        <div style={{ paddingTop: "3rem", paddingLeft: "3rem" }}>
+        <div
+          className={
+            isSideNavExpanded
+              ? `${styles.content} ${styles.contentExpanded}`
+              : styles.content
+          }
+        >
           {children}
         </div>
       </Theme>
