@@ -130,7 +130,7 @@ class GBEnvConfig(BaseModel):
             raise ValueError("field env cannot be empty")
 
 
-DEFAULT_GB_ENVIRONMENT = "PROD"
+DEFAULT_GB_ENVIRONMENT = "STANDALONE"
 
 _GB_ENVIRONMENT_CONFIGS: Dict[str, GBEnvConfig] = {
     "PROD": GBEnvConfig(
@@ -274,7 +274,7 @@ def gb_env_normalize(value: Optional[str], source: str = "input") -> Optional[st
 
 
 def gb_environment() -> str:
-    """Read GB_ENVIRONMENT env var, normalize, default to PROD."""
+    """Read GB_ENVIRONMENT env var, normalize, default to STANDALONE."""
     raw = os.environ.get("GB_ENVIRONMENT")
     normalized = gb_env_normalize(raw, "Environment variable GB_ENVIRONMENT")
     return normalized if normalized else DEFAULT_GB_ENVIRONMENT
