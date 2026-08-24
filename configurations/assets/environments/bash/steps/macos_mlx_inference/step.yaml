@@ -1,0 +1,41 @@
+name: macos_mlx_inference
+version: v1
+type: custom
+config:
+  bash:
+    # run.py explicitly registers the `mlx_model` output once quantization
+    # completes; no need to auto-scan the output dir for artifacts.
+    skip_finding_output_artifacts: true
+
+inputs:
+  allow_unknown: false
+  optional:
+    # Nothing is wired via gbserver's model-download machinery: the script
+    # downloads the source checkpoint itself via `mlx_lm.convert --hf-path`
+    # (HF_PATH env var, see bash_scripts/macos_mlx_inference/run.py).
+    {}
+outputs:
+  allow_unknown: true
+  optional:
+    mlx_model:
+      type: fileset
+
+environment_configs:
+  Bash:
+    launchers:
+      macos_mlx_inference:
+        # No script_path: defaults to command.sh, which builds a dedicated
+        # venv (Apple Silicon + Metal only — mlx/mlx-lm do not install or run
+        # anywhere else) and execs run.py in it.
+        #
+        # No launcher `env:` — set step parameters in build.yaml under
+        # `config.bash.env`; run.py reads each via os.environ.get(...):
+        #   HF_PATH (default ibm-granite/granite-4.2-30b), MLX_PATH
+        #   (default models/granite-4.2-30b-4bit), Q_BITS (4), Q_GROUP_SIZE
+        #   (64), HOST (127.0.0.1), PORT (8080).
+        type: nohup
+        monitors:
+          - log_monitor
+    monitors:
+      log_monitor:
+        ref: space://monitors/bash

@@ -20,6 +20,7 @@ Run user provided bash scripts in the local filesystem.
 
 import asyncio
 import os
+import signal
 import sys
 from asyncio.subprocess import Process
 from pathlib import Path
@@ -51,6 +52,8 @@ from gbserver.utils.logger import get_logger
 logger = get_logger(__name__)
 BASH_SCRIPTS = "bash_scripts"
 JOB_SUB_SH = "llmb_bash_jobsub.sh"
+# How long cleanup_nohup waits after SIGTERM before escalating to SIGKILL.
+SIGTERM_GRACE_PERIOD_SECONDS = 10
 
 
 class Bash(Environment):
@@ -239,6 +242,60 @@ class Bash(Environment):
                 f"bash launch {launch_id} exited with code {returncode}",
                 build_id=build_id,
             )
+
+    # ------------------------------------------------------------------
+    # cleanup_nohup
+    # ------------------------------------------------------------------
+
+    async def cleanup_nohup(
+        self: Self,
+        launch_id: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        """Kill the process tree launched for launch_id.
+
+        launch_nohup starts the job-submission script with
+        start_new_session=True, so its PID is also its process group ID and
+        every descendant (the wrapper script, run.py, and whatever it
+        subprocess.run()s, e.g. mlx_lm.server) stays in that same group.
+        Signalling the group by PID therefore reaches the whole tree without
+        needing to walk it. Without this, cancelling a build only flips its
+        status server-side (via BuildRun.cancel() -> Task.cancel()) and the
+        OS process is silently abandoned, still bound to its port.
+        """
+        self._monitoring_cleanup(launch_id=launch_id)
+
+        process = self._launched_processes.get(launch_id)
+        if process is None:
+            logger.warning("No process to cleanup for launch_id %s", launch_id)
+            return
+
+        try:
+            logger.info(
+                "Terminating nohup process group %s (launch_id=%s)",
+                process.pid,
+                launch_id,
+            )
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                await asyncio.wait_for(
+                    process.wait(), timeout=SIGTERM_GRACE_PERIOD_SECONDS
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Process group %s did not exit after SIGTERM, sending SIGKILL",
+                    process.pid,
+                )
+                os.killpg(process.pid, signal.SIGKILL)
+                await process.wait()
+        except ProcessLookupError:
+            logger.info("Process group %s already exited", process.pid)
+        except Exception as e:
+            logger.error(
+                "Failed to cleanup nohup process group %s: %s", process.pid, e
+            )
+        finally:
+            self._launched_processes.pop(launch_id, None)
 
     async def monitor_log_monitor(
         self: Self,
