@@ -24,7 +24,12 @@ for the shared merge/secret/collision rules.
 ### `cluster_ssh_configs.lsf` — reachability
 
 SkyPilot's LSF provisioner reads `~/.lsf/config` (OpenSSH format) and derives the available cluster
-names from its `Host` entries. Inline the host entries; gbserver materializes the file at launch:
+names from its `Host` entries. Inline the host entries; gbserver materializes the file at launch.
+Authenticate a host with **either** a static key **or** an already-issued rotating SSH cert (e.g.
+Smallstep `step`) — pick one per host; specifying more than one identity mode on the same host is an
+error.
+
+**Static key** (default — works everywhere, no extra setup):
 
 ```yaml
 config:
@@ -39,6 +44,28 @@ config:
         IdentitiesOnly: "yes"       # points IdentityFile at it. Use IdentityFile instead for an
                                     # on-host key path. Specifying both is an error.
 ```
+
+**Rotating SSH cert** (e.g. Smallstep `step`) — for clusters where users authenticate via a
+short-lived, browser/OIDC-issued cert instead of a static key:
+
+```yaml
+config:
+  default_cloud: lsf
+  cluster_ssh_configs:
+    lsf:
+      - Host: lsf-cluster
+        HostName: LSF_HOSTNAME
+        User: LSF_USER               # The *login account*, not the cert's identity-provider principal —
+        IdentityStepCert: true        # the two need not match; the remote host reconciles them, not gbserver.
+        IdentitiesOnly: "yes"
+```
+
+With `IdentityStepCert: true`, gbserver checks at launch that **some** currently loaded cert (e.g. from
+`step ssh list`) is still within its validity window, then drops the directive — it never adds an
+`IdentityFile`/`CertificateFile` line, since the cert is already in the local ssh-agent and its bytes
+rotate independently of this config. gbserver **never runs `step ssh login` itself** (that needs
+interactive browser/OIDC auth it can't perform from a build codepath); if no valid cert is loaded, the
+build fails fast with an actionable error telling you to run `step ssh login` yourself and retry.
 
 ### `cloud_config.lsf` — behavioral tuning
 
