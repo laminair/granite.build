@@ -40,7 +40,7 @@ config:
     # The commit code_dir is EXPECTED to be at. Recorded either way, but when this is
     # set and the checkout is at a different commit the step says so loudly rather
     # than training against whatever happens to be checked out. Empty => no check.
-    expect_ref: "70c1550a171aa8e09a9ad9047a5bf763c39e8579"
+    expect_ref: "e8b3d9c273aed5dc785e2c50cd352cb696bd99f4"
     # OVERRIDE, for a host with no /proj: clone at run time instead. Used ONLY when
     # code_dir does not resolve. https, because the token path below is https-only.
     repo: ""

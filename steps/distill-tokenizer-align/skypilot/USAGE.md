@@ -53,7 +53,7 @@ access clones server-side on the gbserver host.
 ```yaml
 code_config:
   code_dir: "/proj/granite-build/g4os/gb-steps-collection-post-training"
-  expect_ref: "70c1550a171aa8e09a9ad9047a5bf763c39e8579"
+  expect_ref: "e8b3d9c273aed5dc785e2c50cd352cb696bd99f4"
 ```
 
 `expect_ref` is checked against the checkout's actual `HEAD` and the step **fails loudly** on a
