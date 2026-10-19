@@ -62,13 +62,16 @@ config:
     # Only consulted on the clone path. Left EMPTY on purpose: gb-steps-distillation is
     # public, so the clone needs no credential at all.
     token_secret: ""
-    # The interpreter. NOT a bare `python`: this image's venv is not on PATH, and a
-    # bare python resolves to the system interpreter, which has no transformers.
-    python: "/stage/.venv/bin/python"
+    # The interpreter. Set further below (not from this config field) by the
+    # "runtime venv sync" block, once that block's `uv sync --locked` has
+    # resolved the trainer's own pinned deps into a cached venv -- this
+    # image carries no baked venv at all. Left here only as the pre-sync
+    # placeholder; nothing reads this value as-is before the sync runs.
+    python: ""
     # Optional bash run after the source resolves and before the workload, from the
-    # step's working directory. Empty => skipped. Not needed on this image: it
-    # already carries torch 2.8.0, transformers 5.8.0, tokenizers 0.22.1 and
-    # safetensors 0.7.0, confirmed by direct measurement on a real GPU node.
+    # step's working directory. Empty => skipped. Not needed: the runtime venv
+    # sync block (below) already resolves this step's full pinned dependency
+    # set from its own uv.lock.
     setup_command: ""
   # ── Per-checkpoint artifact emission ──────────────────────────────────────
   # OFF by default, and that default is the contract: with it off this step emits
@@ -360,7 +363,12 @@ environment_configs:
         monitors:
           - skypilot_monitor
         config:
-          image_id: "docker:us.icr.io/cil15-shared-registry/kd-sandbox-distill:0.1.0-uv"
+          # Rendered at `make space` / `make publish-step` time: IMAGE_REF is
+          # the image built from this step's own Dockerfile (common.mk
+          # auto-detects it) -- see that file's header comment for why this
+          # step now carries its own slim GPU image instead of pointing at
+          # the opaque, unversioned kd-sandbox-distill:0.1.0-uv.
+          image_id: "docker:${IMAGE_REF}"
           # Node count and accelerators come from the build.yaml
           # (compute_config.num_nodes and launcher_config.resources) so one step
           # serves the smoke and reference runs.
@@ -387,17 +395,17 @@ environment_configs:
           # forwards the outer environment. Confirm on a real run with
           # `grep NCCL_ job.log`; if that file does not set them, add both here.
           run: |
-            # The image's venv is not on PATH by default. The dispatcher runs this
-            # with `bash <file>` (non-login), so this export sticks — a login
-            # shell would re-run /etc/profile and drop it.
-            export PATH=/stage/.venv/bin:$PATH
+            # This image carries no baked venv at all -- the "runtime venv
+            # sync" block below (after the source clone) resolves this
+            # step's own pinned dependencies and sets PATH/PYBIN itself.
 
             # --- distill source delivery: BEGIN (identical in all ported steps) ---
             # `set -eu` is already in effect: the launcher prefixes it.
             CODE_DIR="{{ config.code_config.code_dir }}"
             REPO="{{ config.code_config.repo }}"
             REF="{{ config.code_config.ref }}"
-            PYBIN="{{ config.code_config.python }}"
+            # PYBIN is set further below, after the runtime venv sync -- this
+            # image carries no baked venv to point config.code_config.python at.
             WORK="${GB_BUILD_WORKDIR:-$PWD}"
 
             if [ -n "$CODE_DIR" ] && [ -d "$CODE_DIR/src/gb_steps_post_training" ]; then
@@ -556,6 +564,62 @@ environment_configs:
             {% endif %}
             # --- distill source delivery: END ---
 
+            # --- distill runtime venv sync: BEGIN ---
+            # This image carries no baked venv: distill-gold-train's own
+            # pinned dependencies (torch, transformers, trl, vllm,
+            # deepspeed, kernels, etc. -- see its own pyproject.toml/uv.lock
+            # in the just-cloned $CODE_DIR) install HERE, at job launch
+            # time, via `uv sync --locked`. The assembled venv is cached on
+            # shared storage keyed by the lock file's own hash, so a second
+            # job with the same lock reuses it directly (confirmed locally:
+            # a cache hit against an existing UV_PROJECT_ENVIRONMENT target
+            # completes in ~0.07s with zero network activity, vs. a full
+            # install on a cache miss) -- one slim image, no per-pin-change
+            # rebuild needed.
+            #
+            # Same rank-0-syncs/others-wait shape as the git-clone guard
+            # above, for the same reason: distill-gold is multi-node, and N
+            # ranks hitting `uv sync` on the same shared cache path
+            # concurrently is the same class of race the clone guard exists
+            # for (measured there on build 7e9995b3; not yet measured here,
+            # but the mechanism is identical and the race is structural, not
+            # specific to git).
+            VENV_PROJECT_DIR="$CODE_DIR/steps/distill-gold-train"
+            LOCK_HASH="$(sha256sum "$VENV_PROJECT_DIR/uv.lock" | cut -d' ' -f1)"
+            VENV_CACHE_ROOT="${GB_SHARED_WORKDIR:-$WORK}/uv-venv-cache"
+            VENV_CACHE_DIR="$VENV_CACHE_ROOT/$LOCK_HASH"
+            VENV_DONE_MARKER="$VENV_CACHE_DIR.gb-sync-done"
+            VENV_SYNC_TOKEN="${GB_SKYPILOT_LAUNCH_ID:-}:${SKYPILOT_INTERNAL_JOB_ID:-}:${LSB_JOBID:-${SLURM_JOB_ID:-}}"
+            echo "distill: venv cache key = $LOCK_HASH"
+            echo "distill: venv cache dir = $VENV_CACHE_DIR"
+
+            if [ "${RANK:-0}" != "0" ]; then
+              echo "distill: rank ${RANK:-0} waiting for rank 0 to sync venv at $VENV_CACHE_DIR"
+              WAITED=0
+              while [ "$(cat "$VENV_DONE_MARKER" 2>/dev/null || true)" != "$VENV_SYNC_TOKEN" ]; do
+                sleep 2
+                WAITED=$((WAITED + 2))
+                if [ "$WAITED" -ge 1800 ]; then
+                  echo "distill: FATAL: rank ${RANK:-0} waited ${WAITED}s for rank 0 to" >&2
+                  echo "         sync the venv at $VENV_CACHE_DIR and it never appeared." >&2
+                  exit 1
+                fi
+              done
+            else
+              mkdir -p "$VENV_CACHE_DIR"
+              export UV_CACHE_DIR="${GB_SHARED_WORKDIR:-$WORK}/.uv-cache"
+              export UV_PROJECT_ENVIRONMENT="$VENV_CACHE_DIR/.venv"
+              SYNC_START=$(date +%s)
+              ( cd "$VENV_PROJECT_DIR" && uv sync --locked )
+              SYNC_END=$(date +%s)
+              echo "distill: venv sync took $((SYNC_END - SYNC_START))s"
+              printf '%s\n' "$VENV_SYNC_TOKEN" > "$VENV_DONE_MARKER.tmp.$$"
+              mv -f "$VENV_DONE_MARKER.tmp.$$" "$VENV_DONE_MARKER"
+            fi
+            PYBIN="$VENV_CACHE_DIR/.venv/bin/python"
+            export PATH="$VENV_CACHE_DIR/.venv/bin:$PATH"
+            # --- distill runtime venv sync: END ---
+
             # Snapshot the node-level topology the provisioner exported, then
             # unset it. accelerate assigns per-process rank itself and would be
             # confused by inherited RANK/WORLD_SIZE; these values belong on its
@@ -573,7 +637,7 @@ environment_configs:
             # mmlsattr calls), because a rank-0-only check that refused would leave the
             # other ranks waiting on a rendezvous that is never coming.
             {% if config.gold_config.check_weight_residency %}
-            /stage/.venv/bin/python ./src/check_weight_residency.py \
+            "$PYBIN" ./src/check_weight_residency.py \
               {% if config.gold_config.allow_offline_weights %}--allow-offline{% endif %} \
               "student={{ config.gold_config.model_name_or_path }}" \
               "teacher={{ config.gold_config.teacher_model_name_or_path }}"
@@ -793,7 +857,7 @@ environment_configs:
             # Rendered per node (each has its own container filesystem) but into
             # a shared path, so the content must be identical on every node — it
             # is, since every input is a build parameter except the node count.
-            /stage/.venv/bin/python ./src/render_gold_config.py \
+            "$PYBIN" ./src/render_gold_config.py \
               --output "$CFG" \
               --total-nodes "$NODES" \
               --model-name-or-path "{{ config.gold_config.model_name_or_path }}" \
@@ -886,7 +950,7 @@ environment_configs:
               TRAINER_NODES=$(( NODES - VLLM_SERVERS ))
               if [ "$VLLM_SERVERS" -gt 0 ] && [ "$NODE_RANK" -ge "$TRAINER_NODES" ]; then
                 echo "distill-gold: rank $NODE_RANK serving the student under vLLM"
-                exec /stage/.venv/bin/python -m gb_steps_post_training.distillation.run_vllm_serve \
+                exec "$PYBIN" -m gb_steps_post_training.distillation.run_vllm_serve \
                   --port "${KD_VLLM_API_PORT:-8001}" \
                   --model "{{ config.gold_config.model_name_or_path }}" \
                   --gpu-memory-utilization 0.9 \

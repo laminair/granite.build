@@ -54,8 +54,9 @@ class TestRunScriptIsValidShell:
         assert result.returncode == 0, result.stderr
 
     def test_container_venv_is_put_on_path(self, run_script):
-        """The image's venv is not on PATH by default."""
-        assert "export PATH=/stage/.venv/bin:$PATH" in run_script
+        """The runtime venv-sync block puts the synced venv's bin/ on PATH --
+        this image carries no baked venv to export at the top of the script."""
+        assert 'export PATH="$VENV_CACHE_DIR/.venv/bin:$PATH"' in run_script
 
     def test_no_login_shell_anywhere(self, run_script):
         """A login shell re-runs /etc/profile and drops the venv from PATH."""
@@ -283,8 +284,9 @@ class TestRendererInvocation:
             ), f"{key} is also passed to the renderer"
 
     def test_renderer_is_run_with_the_container_interpreter(self, run_script):
-        """So the config is dumped by the same PyYAML the trainer parses with."""
-        assert "/stage/.venv/bin/python ./src/render_gold_config.py" in run_script
+        """So the config is dumped by the same PyYAML the trainer parses with --
+        PYBIN now points at the runtime-synced venv, not a baked image path."""
+        assert '"$PYBIN" ./src/render_gold_config.py' in run_script
 
     def test_total_nodes_is_passed_from_the_allocation(self, run_script):
         assert '--total-nodes "$NODES"' in run_script
@@ -449,7 +451,10 @@ class TestDistillSourceDelivery:
         # test_source_contract.py's _PINNED_REPO/_PINNED_REF, which assert it for
         # distill-gold too now that the contract glob is `*distill*`.
         assert cc["code_dir"] == ""
-        assert cc["python"] == "/stage/.venv/bin/python"
+        # Empty on purpose: PYBIN is set at runtime, after the venv-sync
+        # block resolves this step's own dependencies into a cached venv --
+        # this image carries no baked venv for this field to point at.
+        assert cc["python"] == ""
         # Empty on purpose: gb-steps-distillation is public, so the clone needs no
         # credential in the container.
         assert cc["repo"] != "" and cc["token_secret"] == ""
@@ -488,7 +493,7 @@ class TestDistillSourceDelivery:
         """The point of delivering the source at all: the renderer is what imports it, so
         the export must precede the invocation rather than merely existing."""
         assert run_script.index('export PYTHONPATH="$CODE_DIR/src') < run_script.index(
-            "/stage/.venv/bin/python ./src/render_gold_config.py"
+            '"$PYBIN" ./src/render_gold_config.py'
         )
 
     def test_trainer_runs_as_a_module_from_the_delivered_source(self, run_script):

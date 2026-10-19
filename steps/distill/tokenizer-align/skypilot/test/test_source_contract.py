@@ -33,10 +33,18 @@ _SR_END = "            # --- distill source delivery: END"
 # trainer too, but with its own single-purpose region; the rest clone nothing. Everything
 # else under steps/distill/ is discovered, so a new step is checked with no edit here and
 # has to be named in this set to be left out.
+#
+# gold: moved to its own Dockerfile + a runtime `uv sync` (see its
+# step-template.yaml's "distill runtime venv sync" block) instead of the
+# baked-image /stage/.venv convention the other ported steps still use, so
+# its code_config.python is now "" rather than "/stage/.venv/bin/python" --
+# a deliberate, not accidental, divergence. Remove gold here once (if) the
+# other ported steps migrate to the same convention.
 _NOT_PORTED = {
     "corpus-pin-check",
     "corpus-sources",
     "gen-smoke",
+    "gold",
     "probe",
     "vllm-server",
 }
