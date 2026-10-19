@@ -32,6 +32,35 @@ FROM us.icr.io/cil15-shared-registry/gb-cuda-devel-base:<tag>
 Your step's own `make image` / `make publish-image` (via its `common.mk`-based
 Makefile) are otherwise unaffected — only the `FROM` line changes.
 
+## Two Python versions, uv-managed
+
+`uv` is the default manager for both Python itself and dependencies in this
+image — not apt/deadsnakes, not system pip. Two interpreters are installed:
+
+- **3.14** (default) — what a bare `uv run`/`uv sync`/`uv venv` resolves to,
+  no flag needed.
+- **3.13** — available via `--python 3.13` on any of those commands.
+
+There is **no bare `python3`/`python` on PATH** — confirmed (`which python3
+python` exits 1 in the built image). This is deliberate, not an oversight:
+every current consumer (`steps/bfcl-eval/skypilot/Dockerfile`) runs its own
+`uv sync`, which creates a `.venv` and prepends `.venv/bin` onto `PATH` —
+that's what resolves `python`/`python3` for the step, not a system-level
+interpreter from this base. In your step's own Dockerfile:
+
+```dockerfile
+FROM us.icr.io/cil15-shared-registry/gb-cuda-devel-base:<tag>
+COPY pyproject.toml uv.lock .
+RUN uv sync --locked --no-dev --no-cache          # 3.14 by default
+# or: RUN uv sync --locked --no-dev --no-cache --python 3.13
+ENV PATH="/path/to/.venv/bin:${PATH}"
+```
+
+Installed interpreters live under `UV_PYTHON_INSTALL_DIR=/opt/uv/python`
+(pinned explicitly rather than left at uv's own default
+`~/.local/share/uv/python`, so the path is stable regardless of which
+user/HOME a later consumer layer runs as).
+
 ## Two things this image does NOT solve by itself
 
 ### 1. `pip`/`uv` can shadow the toolkit

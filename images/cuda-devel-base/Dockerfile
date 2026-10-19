@@ -13,9 +13,10 @@
 # limitations under the License.
 #
 # Shared GPU base image for granite.build steps. See README.md for what this
-# is, when to use it, and the two residual caveats (pip can shadow the
-# toolkit; BlueVela's pyxis/enroot runtime still needs an `ldconfig` refresh
-# at container launch) that this image does NOT solve by itself.
+# is, when to use it, and the residual caveats (pip can shadow the toolkit;
+# BlueVela's pyxis/enroot runtime bypasses this image's ENTRYPOINT entirely,
+# so the `ldconfig` refresh it needs lives in each step's own run script, not
+# here) that this image does NOT solve by itself.
 #
 # Pinned to CUDA 12.9.1 to match vLLM 0.27.1's prebuilt `+cu129` wheels (the
 # version currently used by granite-evals) -- not NGC's latest tag (13.4.2
@@ -24,22 +25,36 @@
 ARG CUDA_IMAGE_TAG=12.9.1-devel-ubuntu22.04
 FROM nvcr.io/nvidia/cuda:${CUDA_IMAGE_TAG}
 
-ARG PYTHON_VERSION=3.12
 ARG DEBIAN_FRONTEND=noninteractive
+# The default a bare `uv run`/`uv sync`/`uv venv` resolves to (no --python
+# flag); SECONDARY is installed alongside it and reachable via
+# `--python 3.13`. See README.md's "Two Python versions, uv-managed" section.
+ARG UV_PYTHON_DEFAULT=3.14
+ARG UV_PYTHON_SECONDARY=3.13
 
-# Minimal OS + Python toolchain (mirrors the legacy sage Dockerfile's
-# deadsnakes pattern -- Ubuntu 22.04's own repos only ship Python 3.10).
+# build-essential: for a consuming step's own `uv sync` building a C
+# extension from source (same rationale bfcl-eval's own Dockerfile gives for
+# its build-essential install). No deadsnakes/apt Python here -- uv manages
+# Python itself below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git curl wget ca-certificates software-properties-common gnupg build-essential \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y --no-install-recommends \
-        python${PYTHON_VERSION} python${PYTHON_VERSION}-venv python${PYTHON_VERSION}-dev \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1 \
+        git curl wget ca-certificates build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# uv, via the same pinned-binary COPY pattern already used by bfcl-eval's Dockerfile.
+# uv is the default manager for both Python itself and dependencies in this
+# image -- not apt/deadsnakes, not system pip. Installed interpreters live
+# under UV_PYTHON_INSTALL_DIR, pinned here rather than left at uv's own
+# default (~/.local/share/uv/python) so the path stays stable regardless of
+# which user/HOME a later consumer layer runs as.
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+RUN uv python install ${UV_PYTHON_DEFAULT} ${UV_PYTHON_SECONDARY} \
+    && uv python pin ${UV_PYTHON_DEFAULT} --no-workspace
+
+# Deliberately NOT symlinking a bare `python3`/`python` to either of these
+# (no update-alternatives, unlike the old deadsnakes setup this replaced).
+# Every current consumer (e.g. steps/bfcl-eval/skypilot/Dockerfile) runs its
+# own `uv sync`, which creates its own `.venv` and prepends `.venv/bin` onto
+# PATH -- a bare system-level `python3` was never relied upon. See README.md.
 
 # CUDA toolkit env vars, restated explicitly (sage-style) so the intent is
 # self-documenting even though the NGC devel base already sets these itself.
