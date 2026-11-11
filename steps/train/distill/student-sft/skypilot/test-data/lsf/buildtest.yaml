@@ -30,8 +30,7 @@ target_expectations:
     expected_steps:
       - metadata_matches:
           distill_code_commit: "^[0-9a-f]{40}$"
-          distill_code_source: "^(filesystem|git)$"
-          distill_code_dirty: "^[0-9]+$"
+          distill_code_source: "^baked-image$"
         config:
           sft_config:
             # EMPTY is what makes this the control rather than a forward-KL distillation arm

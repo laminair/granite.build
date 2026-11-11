@@ -55,8 +55,8 @@ _BV_KEY = os.environ.get("BV_SSH_KEY", "~/.ssh/ibm-bluevela.key")
 # Opt-in switch for the cluster run. `make test` in the step directory invokes
 # pytest with no marker filter, so without this a routine `make test` would
 # submit a real LSF job to a shared cluster — costly to other users and easy to
-# abandon half-scheduled. The offline tests (test_step_template.py, plus the
-# ported test_export_hf_model.py when a checkout is present) cover the step's
+# abandon half-scheduled. The offline tests (test_step_template.py and the
+# ported test_export_hf_model.py) cover the step's
 # contracts and always run; this one is deliberate:
 #
 #     GB_STEP_BLUEVELA_BUILD=1 make -C steps/aux/hf-export/skypilot test

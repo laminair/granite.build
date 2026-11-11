@@ -14,13 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Integration test: distill-gold runs multi-node end to end on Skypilot/LSF.
+"""Integration test: logit-distill runs multi-node end to end on Skypilot/LSF.
 
-A **step-level** test, living beside the distill-gold step's Makefile in a
+A **step-level** test, living beside the logit-distill step's Makefile in a
 per-cluster subdir (``steps/train/distill/logit-distill/skypilot/test/lsf/``) with its fixtures
 in the matching ``test-data/lsf/``. Run it from the step directory::
 
-    make -C steps/train/distill/logit-distill/skypilot test
+    GB_STEP_BLUEVELA_BUILD=1 make -C steps/train/distill/logit-distill/skypilot test
 
 ``make test`` depends on ``make space``, so the git-ignored ``space/`` directory
 the fixture's ``space_uri`` points at is always rendered first; this test does no
@@ -28,8 +28,8 @@ rendering of its own.
 
 What it proves that the unit tests cannot. The renderer and template tests cover
 the config contract offline; only a real run shows that the two nodes each got
-their own rank, that the config rendered *inside* the container against the /proj
-checkout, and that rank 0 alone registered the checkpoint. The fixture asks for
+their own rank, that the config rendered *inside* the container against the trainer
+baked into the GPU image, and that rank 0 alone registered the checkpoint. The fixture asks for
 ``num_nodes: 2`` with a small model pair so it costs minutes rather than hours.
 
 Requirements beyond the usual: a SkyPilot install with LSF multi-node support

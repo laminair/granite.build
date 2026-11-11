@@ -1,9 +1,9 @@
 granite.build:
   name: distill-gold-smoke
-  # Smoke build for the distill-gold step on BlueVela (SkyPilot / LSF).
+  # Smoke build for the logit-distill step on BlueVela (SkyPilot / LSF).
   #
   # Exercises the plumbing — 2-node allocation, per-node rank, config rendering
-  # inside the container against the /proj checkout, checkpoint publication — not
+  # inside the container against the trainer baked into the image, checkpoint publication — not
   # the science. Everything expensive is scaled down; the model pair is not.
   #
   # Why the REFERENCE pair rather than something small. GOLD compares student and

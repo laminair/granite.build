@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Integration test: distill-tokenizer-align runs end to end on Skypilot/LSF.
+"""Integration test: tokenizer-align runs end to end on Skypilot/LSF.
 
 A **step-level** test, living beside the step's Makefile in a per-cluster subdir
 (``steps/train/distill/tokenizer-align/skypilot/test/lsf/``) with its fixtures in the
@@ -28,8 +28,8 @@ rendering of its own.
 
 What it proves that the offline tests cannot. test_step_template.py covers the config
 contract, the flag surface and the artifact declarations without a cluster. Only a
-real run shows that the shared distillation package was actually delivered from the
-/proj checkout and imported inside the container, that the overlay builder's
+real run shows that the shared distillation package baked into the CPU image
+imported inside the container, that the overlay builder's
 ``tokenizer_class`` pin fired against a real Granite directory, that the retagged
 student passed its ChatML post-condition, and that **all three** artifacts registered
 -- the count being the point, since an output the template failed to declare is
@@ -61,8 +61,8 @@ _BV_KEY = os.environ.get("BV_SSH_KEY", "~/.ssh/ibm-bluevela.key")
 # Opt-in switch for the cluster run. `make test` in the step directory invokes
 # pytest with no marker filter, so without this a routine `make test` would
 # submit a real LSF job to a shared cluster — costly to other users and easy to
-# abandon half-scheduled. The offline tests (test_step_template.py, plus the
-# ported test_build_overlay.py when a checkout is present) cover the step's
+# abandon half-scheduled. The offline tests (test_step_template.py and the
+# ported test_build_overlay.py) cover the step's
 # contracts and always run; this one is deliberate:
 #
 #     GB_STEP_BLUEVELA_BUILD=1 make -C steps/train/distill/tokenizer-align/skypilot test

@@ -1,8 +1,8 @@
 # YAML-driven spec for test_skypilot_lsf_distill_corpus_prep.py (located by the test/ <->
 # test-data/ helper, so the pairing holds in both test modes; see steps/README.md).
 #
-# Runs align -> corpus on the SkyPilot LSF/BlueVela environment, proving the port's launch
-# path end to end: the shared distillation package delivered from the /proj checkout, a real
+# Runs align -> corpus on the SkyPilot LSF/BlueVela environment, proving the launch path
+# end to end: the shared distillation CPU image, a real
 # tokenizer loaded FROM THE BOUND UPSTREAM ARTIFACT, conversations rendered and filtered, and
 # the corpus registered as the train JSONL FILE rather than its directory.
 #
@@ -32,8 +32,7 @@ target_expectations:
     expected_steps:
       - metadata_matches:
           distill_code_commit: "^[0-9a-f]{40}$"
-          distill_code_source: "^(filesystem|git)$"
-          distill_code_dirty: "^[0-9]+$"
+          distill_code_source: "^baked-image$"
         config:
           corpus_config:
             # Pin the settings whose wrong value changes WHICH examples survive rather

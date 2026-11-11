@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Integration test: distill-corpus-prep runs end to end on Skypilot/LSF.
+"""Integration test: data-prep runs end to end on Skypilot/LSF.
 
 A **step-level** test, beside the step's Makefile in a per-cluster subdir with its
 fixtures in the matching ``test-data/lsf/``. Run it from the step directory::
@@ -24,7 +24,7 @@ fixtures in the matching ``test-data/lsf/``. Run it from the step directory::
 What it proves that the offline tests cannot. test_step_template.py covers the config
 contract and the flag surface, and the 88 ported unit tests cover the filtering logic
 against synthetic fixtures — neither loads a real tokenizer. Only a real run shows that
-the shared package was delivered and imported inside the container, that a genuine
+the shared package baked into the CPU image imported inside the container, that a genuine
 Granite tokenizer rendered the conversations, that the length and completion-boundary
 filters agreed with that tokenizer, and that the artifact registered as the train JSONL
 FILE rather than its directory.
@@ -54,8 +54,8 @@ _BV_KEY = os.environ.get("BV_SSH_KEY", "~/.ssh/ibm-bluevela.key")
 # Opt-in switch for the cluster run. `make test` in the step directory invokes
 # pytest with no marker filter, so without this a routine `make test` would
 # submit a real LSF job to a shared cluster — costly to other users and easy to
-# abandon half-scheduled. The offline tests (test_step_template.py, plus the
-# ported test_prep_corpus.py when a checkout is present) cover the step's
+# abandon half-scheduled. The offline tests (test_step_template.py and the
+# ported test_prep_corpus.py) cover the step's
 # contracts and always run; this one is deliberate:
 #
 #     GB_STEP_BLUEVELA_BUILD=1 make -C steps/train/distill/data-prep/skypilot test
@@ -141,7 +141,7 @@ def _bluevela_reachable() -> bool:
     f"{_BV_KEY} and network access to {_BV_HOST})",
 )
 class TestSkypilotLsfDistillCorpusPrep(AbstractYamlBuildRunnerTest):
-    """GOLD distillation across two BlueVela nodes, via enroot."""
+    """align -> data-prep on BlueVela, via enroot."""
 
     def _get_yaml_spec_dir(self) -> Path:
         # Fixtures resolve through the repo's test/ <-> test-data/ helper, which
