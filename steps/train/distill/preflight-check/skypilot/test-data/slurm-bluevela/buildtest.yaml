@@ -1,18 +1,20 @@
 # YAML spec for test_skypilot_slurm_bluevela_train_distill_preflight_check.py (located by the
-# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
-# shared-FS no-ops on BlueVela, so every target records exactly one step.
+# test/ <-> test-data/ helper; see steps/README.md). Each hf:// input is pulled by its
+# own hfpull step and each hf:// output pushed by its own hfpush step, which is what
+# step_count counts.
 targets:
   - probe
 target_expectations:
-- target_name: probe
-  # A diagnostic against a literal path: no inputs, no outputs.
-  step_count: 1
-  input_artifact_count: 0
-  output_artifact_count: 0
-  expected_steps:
-    - config:
-        probe_config:
-          probe: load-student
+  - target_name: probe
+    # 1 hfpull + the step + 0 hfpush.
+    step_count: 2  # CALIBRATE against the first green run
+    input_artifact_count: 1
+    output_artifact_count: 0
+    expected_steps:
+      - step_uri: space://steps/train/distill/preflight-check
+        config:
+          probe_config:
+            probe: load-student
 space_uri: ../../space
 tests:
   - runner

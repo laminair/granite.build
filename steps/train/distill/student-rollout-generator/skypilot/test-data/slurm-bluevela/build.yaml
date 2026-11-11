@@ -1,6 +1,8 @@
 # Build-test fixture for student-rollout-generator on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_student_rollout_generator.py and buildtest.yaml beside this file.
-# Plumbing scale: what SUCCESS proves is in the test's docstring.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
+# to a per-run private dataset the test verifies and then deletes.
 granite.build:
   name: slurm-bluevela-student-rollout-generator-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -11,11 +13,9 @@ granite.build:
       environment_uri: space://environments/skypilot/slurm/bluevela
       inputs:
         model:
-          uri: "env:///proj/granite-build/g4os/skypilot-test/sft/checkpoints/v0-20260529-20260529_212150-hf/epoch_hf_2"
+          uri: "hf:///models/ibm-granite/granite-4.0-h-350m"
           type: model
       outputs:
-        # Build-unique keys: an artifact URI another build already registered in
-        # the space is refused.
         vllm_url:
           uri: "mem://distill-rollout-buildtest-{{ run_metadata.build_id }}"
         cluster_name:
@@ -37,7 +37,7 @@ granite.build:
                 memory: 256
             vllm_config:
               port: 8001
-              max_model_len: 4096
+              max_model_len: 2048
               health_timeout_seconds: 1800
               # Safety net if teardown never fires.
               max_lifetime_seconds: 2400

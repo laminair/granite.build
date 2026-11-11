@@ -1,6 +1,8 @@
 # Build-test fixture for repetition-check on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_repetition_check.py and buildtest.yaml beside this file.
-# Plumbing scale: what SUCCESS proves is in the test's docstring.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
+# to a per-run private dataset the test verifies and then deletes.
 granite.build:
   name: slurm-bluevela-repetition-check-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -9,9 +11,14 @@ granite.build:
   targets:
     gen-smoke:
       environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # Bound only to be pulled: the rung below names the pulled path.
+        rung:
+          uri: "hf:///models/ibm-granite/granite-4.0-h-350m"
+          type: model
       outputs:
         repetition_report:
-          uri: "env://{{ binding.path }}"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-repetition-report___GBTEST_HF_PUSH_RUN__"
           type: fileset
       steps:
         - step_uri: space://steps/train/distill/repetition-check
@@ -30,9 +37,9 @@ granite.build:
                 memory: 256
             gen_smoke_config:
               rungs:
-                - "0:/proj/granite-build/g4os/skypilot-test/sft/checkpoints/v0-20260529-20260529_212150-hf/epoch_hf_2"
+                - "0:{{ bindings.rung.binding.path }}"
               max_repetition: 0.15
               new_tokens: 64
               # The verdict is not the subject here; the run and the report are.
               gate_final_rung: false
-              output_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/repetition-check/{{ run_metadata.build_id }}/gen-smoke"
+              output_dir: "gen-smoke"

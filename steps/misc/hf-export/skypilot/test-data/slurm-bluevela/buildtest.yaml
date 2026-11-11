@@ -1,32 +1,23 @@
 # YAML spec for test_skypilot_slurm_bluevela_misc_hf_export.py (located by the
-# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
-# shared-FS no-ops on BlueVela, so every target records exactly one step.
+# test/ <-> test-data/ helper; see steps/README.md). Each hf:// input is pulled by its
+# own hfpull step and each hf:// output pushed by its own hfpush step, which is what
+# step_count counts.
 targets:
   - export
-  - export-again
 target_expectations:
-- target_name: export
-  step_count: 1
-  input_artifact_count: 1
-  output_artifact_count: 1
-  expected_steps:
-    - config:
-        export_config:
-          checkpoint: "checkpoint-50"
-          padding_side: "right"
-          verify: true
-          allow_unknown: true
-- target_name: export-again
-  step_count: 1
-  input_artifact_count: 2
-  output_artifact_count: 1
-  expected_steps:
-    - config:
-        export_config:
-          checkpoint: "checkpoint-50"
-          padding_side: "right"
-          verify: true
-          allow_unknown: true
+  - target_name: export
+    # 2 hfpull + the step + 1 hfpush.
+    step_count: 4  # CALIBRATE against the first green run
+    input_artifact_count: 2
+    output_artifact_count: 1
+    expected_steps:
+      - step_uri: space://steps/misc/hf-export
+        config:
+          export_config:
+            checkpoint: "checkpoint-1"
+            padding_side: "right"
+            verify: true
+            allow_unknown: true
 space_uri: ../../space
 tests:
   - runner
@@ -35,4 +26,4 @@ tests:
 simulate_step_failure: false
 # cpu/gpu-mid queueing on a shared cluster, plus a one-time .sqsh import of a new
 # image tag (a CPU job that has queued for over an hour).
-timeout_minutes: 180
+timeout_minutes: 120

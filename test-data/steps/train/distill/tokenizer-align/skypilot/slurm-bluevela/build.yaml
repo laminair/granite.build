@@ -1,6 +1,8 @@
 # Build-test fixture for tokenizer-align on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_tokenizer_align.py and buildtest.yaml beside this file.
-# Plumbing scale: what SUCCESS proves is in the test's docstring.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
+# to a per-run private dataset the test verifies and then deletes.
 granite.build:
   name: slurm-bluevela-tokenizer-align-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -11,25 +13,24 @@ granite.build:
       environment_uri: space://environments/skypilot/slurm/bluevela
       inputs:
         teacher:
-          uri: "env:///proj/granite-build/g4os/models/granite-4.1-3b-pinned"
+          uri: "hf:///models/ibm-granite/granite-4.1-3b"
           type: model
         student:
-          uri: "env:///proj/granite-build/g4os/skypilot-test/sft/checkpoints/v0-20260529-20260529_212150-hf/epoch_hf_2"
+          uri: "hf:///models/ibm-granite/granite-4.0-h-350m"
           type: model
-        # The granite-native template with a real {% generation %} block: without
-        # it prep cannot build assistant masks.
+        # The granite-native template with real {% generation %} blocks.
         chat_template:
-          uri: "env:///proj/granite-build/g4os/chat_templates/granite_4_role_generation.jinja"
+          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-tokenizer-align/main/granite_4_role_generation.jinja"
           type: dataset
       outputs:
         retagged_student:
-          uri: "env://{{ binding.path }}"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-align-retagged___GBTEST_HF_PUSH_RUN__"
           type: model
         teacher_overlay:
-          uri: "env://{{ binding.path }}"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-align-teacher-overlay___GBTEST_HF_PUSH_RUN__"
           type: model
         student_overlay:
-          uri: "env://{{ binding.path }}"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-align-student-overlay___GBTEST_HF_PUSH_RUN__"
           type: model
       steps:
         - step_uri: space://steps/train/distill/tokenizer-align
@@ -49,7 +50,7 @@ granite.build:
               sbatch_options:
                 constraint: null
             align_config:
-              out_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/tokenizer-align/{{ run_metadata.build_id }}/align"
+              out_dir: "align"
               # False for this granite-4.x pair, which carries start_of_role/end_of_role
               # and no im_start; safe only because the chat template is granite-native.
               require_chatml: false

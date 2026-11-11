@@ -14,13 +14,21 @@
 
 """data-validate end to end on IBM BlueVela SLURM.
 
-SUCCESS proves that a corpus this build prepared is accepted against its own manifest: same tokenizer
-identity, length budget, think/documents policy and eval fraction. The refusal
-paths are covered offline by test_check_corpus_pin.py.
+SUCCESS proves that a staged corpus is accepted against its own manifest after a hub round trip: same
+tokenizer identity, length budget, think/documents policy and eval fraction. The
+refusal paths are covered offline by test_check_corpus_pin.py.
+
+Inputs are the public granite models and PRIVATE
+``ibm-granite/gb-step-distillation-buildtest-inputs-*`` datasets, so the space's
+``HF_TOKEN`` must be able to read ``ibm-granite``.
+Outputs are pushed to per-run private datasets in ``GBTEST_HF_PUSH_ORG`` (set it to
+``ibm-granite``, where granitebuild may write), which the mixin checks landed and then
+deletes. That needs an ``HF_TOKEN`` that can write and delete there.
 
 Run it from the step directory::
 
-    GB_STEP_BLUEVELA_BUILD=1 make -C steps/train/distill/data-validate/skypilot test TESTS=test/slurm-bluevela
+    GB_STEP_BLUEVELA_BUILD=1 GBTEST_HF_PUSH_ORG=ibm-granite \
+        make -C steps/train/distill/data-validate/skypilot test TESTS=test/slurm-bluevela
 
 IBM infrastructure through the local space, so marked ``ibm`` and extended-only. It
 also needs an explicit opt-in: ``make test`` runs every test in the step directory, and
@@ -39,6 +47,7 @@ from libgbtest.buildrunner.buildtest import (
     get_test_data_dir_for,
 )
 from libgbtest.constants import extended_testing_only
+from libgbtest.hfpush import HfPushCleanupMixin
 
 pytestmark = [pytest.mark.skypilot_integration, pytest.mark.ibm]
 
@@ -63,14 +72,16 @@ _OPT_IN = "GB_STEP_BLUEVELA_BUILD"
     os.environ.get("RUNNING_IN_CICD", "False").lower() == "true",
     reason="No BlueVela SSH key on SPS CI/CD hosts",
 )
-class TestSkypilotSlurmBluevelaTrainDistillDataValidate(AbstractYamlBuildRunnerTest):
+class TestSkypilotSlurmBluevelaTrainDistillDataValidate(
+    HfPushCleanupMixin, AbstractYamlBuildRunnerTest
+):
     """data-validate on BlueVela SLURM, via Pyxis."""
 
     def _get_yaml_spec_dir(self) -> Path:
         """Return the fixture dir holding this test's build.yaml and buildtest.yaml."""
         return get_test_data_dir_for(__file__)
 
-    @pytest.mark.timeout(11100)  # above buildtest.yaml's timeout_minutes (180)
+    @pytest.mark.timeout(7500)  # above buildtest.yaml's timeout_minutes (120)
     def test_runner(self):
         """Run the happy-path build with room for the buildtest timeout."""
         super().test_runner()

@@ -15,13 +15,20 @@
 """logit-distill end to end on IBM BlueVela SLURM.
 
 SUCCESS proves that the GOLD trainer runs two data-parallel ranks under DeepSpeed ZeRO-3 in the GPU
-image, the in-container GPU check sees both GPUs (#604), and rank 0 registers the
-checkpoint. Off-policy (lmbda 0), two optimizer steps. Multi-node is exercised by
-the granite4-350m SLURM recipe's scaled-down run, not here.
+image, the in-container GPU check sees both GPUs (#604), two optimizer steps train
+the retagged 350m against granite-4.1-3b, and rank 0 pushes the checkpoint.
+
+Inputs are the public granite models and PRIVATE
+``ibm-granite/gb-step-distillation-buildtest-inputs-*`` datasets, so the space's
+``HF_TOKEN`` must be able to read ``ibm-granite``.
+Outputs are pushed to per-run private datasets in ``GBTEST_HF_PUSH_ORG`` (set it to
+``ibm-granite``, where granitebuild may write), which the mixin checks landed and then
+deletes. That needs an ``HF_TOKEN`` that can write and delete there.
 
 Run it from the step directory::
 
-    GB_STEP_BLUEVELA_BUILD=1 make -C steps/train/distill/logit-distill/skypilot test TESTS=test/slurm-bluevela
+    GB_STEP_BLUEVELA_BUILD=1 GBTEST_HF_PUSH_ORG=ibm-granite \
+        make -C steps/train/distill/logit-distill/skypilot test TESTS=test/slurm-bluevela
 
 IBM infrastructure through the local space, so marked ``ibm`` and extended-only. It
 also needs an explicit opt-in: ``make test`` runs every test in the step directory, and
@@ -40,6 +47,7 @@ from libgbtest.buildrunner.buildtest import (
     get_test_data_dir_for,
 )
 from libgbtest.constants import extended_testing_only
+from libgbtest.hfpush import HfPushCleanupMixin
 
 pytestmark = [pytest.mark.skypilot_integration, pytest.mark.ibm]
 
@@ -64,7 +72,9 @@ _OPT_IN = "GB_STEP_BLUEVELA_BUILD"
     os.environ.get("RUNNING_IN_CICD", "False").lower() == "true",
     reason="No BlueVela SSH key on SPS CI/CD hosts",
 )
-class TestSkypilotSlurmBluevelaTrainDistillLogitDistill(AbstractYamlBuildRunnerTest):
+class TestSkypilotSlurmBluevelaTrainDistillLogitDistill(
+    HfPushCleanupMixin, AbstractYamlBuildRunnerTest
+):
     """logit-distill on BlueVela SLURM, via Pyxis."""
 
     def _get_yaml_spec_dir(self) -> Path:

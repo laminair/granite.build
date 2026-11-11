@@ -14,12 +14,16 @@
 
 """preflight-check end to end on IBM BlueVela SLURM.
 
-SUCCESS proves that the load-student probe loads the granite4-350m student (granitemoehybrid) in the
-GPU image on an H200 and prints its verdict.
+SUCCESS proves that the load-student probe loads the public granite-4.0-h-350m (granitemoehybrid) in
+the GPU image on an H200 and prints its verdict.
 
+Inputs are the public granite models and PRIVATE
+``ibm-granite/gb-step-distillation-buildtest-inputs-*`` datasets, so the space's
+``HF_TOKEN`` must be able to read ``ibm-granite``.
 Run it from the step directory::
 
-    GB_STEP_BLUEVELA_BUILD=1 make -C steps/train/distill/preflight-check/skypilot test TESTS=test/slurm-bluevela
+    GB_STEP_BLUEVELA_BUILD=1 GBTEST_HF_PUSH_ORG=ibm-granite \
+        make -C steps/train/distill/preflight-check/skypilot test TESTS=test/slurm-bluevela
 
 IBM infrastructure through the local space, so marked ``ibm`` and extended-only. It
 also needs an explicit opt-in: ``make test`` runs every test in the step directory, and

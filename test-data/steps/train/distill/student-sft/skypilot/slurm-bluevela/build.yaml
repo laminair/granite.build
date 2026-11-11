@@ -1,115 +1,28 @@
 # Build-test fixture for student-sft on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_student_sft.py and buildtest.yaml beside this file.
-# Plumbing scale: what SUCCESS proves is in the test's docstring.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
+# to a per-run private dataset the test verifies and then deletes.
 granite.build:
   name: slurm-bluevela-student-sft-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
   retries:
     max_retries: 0
   targets:
-    align:
-      environment_uri: space://environments/skypilot/slurm/bluevela
-      inputs:
-        teacher:
-          uri: "env:///proj/granite-build/g4os/models/granite-4.1-3b-pinned"
-          type: model
-        student:
-          uri: "env:///proj/granite-build/g4os/skypilot-test/sft/checkpoints/v0-20260529-20260529_212150-hf/epoch_hf_2"
-          type: model
-        # The granite-native template with a real {% generation %} block: without
-        # it prep cannot build assistant masks.
-        chat_template:
-          uri: "env:///proj/granite-build/g4os/chat_templates/granite_4_role_generation.jinja"
-          type: dataset
-      outputs:
-        retagged_student:
-          uri: "env://{{ binding.path }}"
-          type: model
-        teacher_overlay:
-          uri: "env://{{ binding.path }}"
-          type: model
-        student_overlay:
-          uri: "env://{{ binding.path }}"
-          type: model
-      steps:
-        - step_uri: space://steps/train/distill/tokenizer-align
-          config:
-            poll_interval_seconds: 30
-            log_retrieval_interval_seconds: 30
-            compute_config:
-              num_nodes: 1
-              num_cpus_per_node: 4
-            launcher_config:
-              resources:
-                cluster: "bluevela"
-                # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
-                # h200 constraint has to go with it (null drops the directive).
-                zone: "cpu"
-                memory: 32
-              sbatch_options:
-                constraint: null
-            align_config:
-              out_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/student-sft/{{ run_metadata.build_id }}/align"
-              # False for this granite-4.x pair, which carries start_of_role/end_of_role
-              # and no im_start; safe only because the chat template is granite-native.
-              require_chatml: false
-              verify: true
-              dry_run: false
-
-    corpus:
-      environment_uri: space://environments/skypilot/slurm/bluevela
-      inputs:
-        tokenizer:
-          binding: align.retagged_student
-        source_dataset:
-          uri: "env:///proj/granite-build/g4os/gbtest/gold-distill-smoke/smoke_2000_nothink.jsonl"
-          type: dataset
-      outputs:
-        corpus:
-          uri: "env://{{ binding.path }}"
-          type: dataset
-      steps:
-        - step_uri: space://steps/train/distill/data-prep
-          config:
-            poll_interval_seconds: 30
-            log_retrieval_interval_seconds: 30
-            compute_config:
-              num_nodes: 1
-              num_cpus_per_node: 4
-            launcher_config:
-              resources:
-                cluster: "bluevela"
-                # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
-                # h200 constraint has to go with it (null drops the directive).
-                zone: "cpu"
-                memory: 32
-              sbatch_options:
-                constraint: null
-            corpus_config:
-              # Absolute and build-unique: other targets name eval.jsonl or the corpus
-              # dir by path, and every target run gets its own GB_BUILD_WORKDIR.
-              out_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/student-sft/{{ run_metadata.build_id }}/corpus"
-              max_length: 4096
-              think_policy: "keep"
-              completion_boundary: "last_message"
-              # Above zero: the eval split must exist for teacher-divergence.
-              eval_fraction: 0.25
-              max_examples: 64
-              emit_row_id: true
-              # keep: the granite 4.x template renders documents into the system turn.
-              documents_policy: "keep"
-              seed: 42
-
     train-sft:
       environment_uri: space://environments/skypilot/slurm/bluevela
       inputs:
+        # tokenizer-align's retagged student, staged once (see the repo's README).
         student:
-          binding: align.retagged_student
+          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-retagged/main/retagged_student"
+          type: model
+        # data-prep's 48-row train split, staged once with the retagged student's tokenizer.
         corpus:
-          binding: corpus.corpus
+          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-corpus/main/train.jsonl"
+          type: dataset
       outputs:
         checkpoint:
-          uri: "env://{{ binding.path }}"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-sft-checkpoint___GBTEST_HF_PUSH_RUN__"
           type: model
       steps:
         - step_uri: space://steps/train/distill/student-sft
@@ -131,18 +44,18 @@ granite.build:
               gpus_per_node: 1
               nodes: 1
             sft_config:
-              output_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/student-sft/{{ run_metadata.build_id }}/train-sft"
+              output_dir: "train-sft"
               response_template: "<|start_of_role|>assistant<|end_of_role|>"
               max_length: 4096
               per_device_train_batch_size: 1
               gradient_accumulation_steps: 8
               learning_rate: "1.0e-05"
               num_train_epochs: 1
-              # Checkpoint on the first step, so publication is exercised.
-              save_steps: 1
+              # One save at the end of the 6-step epoch: publication is exercised
+              # without paying for six checkpoint uploads.
+              save_steps: 6
               seed: 42
-              # The whole (64-row) corpus: sft.py checks its row count against prep's
-              # manifest, so the corpus is what gets shrunk, not this.
+              # The whole corpus: sft.py checks its row count against prep's manifest.
               max_dataset_size: -1
               extra_config_yaml: "logging_steps: 1"
               # Empty: a plain-SFT pass, not a forward-KL distillation arm.

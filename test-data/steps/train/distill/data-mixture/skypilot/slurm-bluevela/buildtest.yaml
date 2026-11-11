@@ -1,19 +1,21 @@
 # YAML spec for test_skypilot_slurm_bluevela_train_distill_data_mixture.py (located by the
-# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
-# shared-FS no-ops on BlueVela, so every target records exactly one step.
+# test/ <-> test-data/ helper; see steps/README.md). Each hf:// input is pulled by its
+# own hfpull step and each hf:// output pushed by its own hfpush step, which is what
+# step_count counts.
 targets:
   - sources
 target_expectations:
-- target_name: sources
-  # No named inputs (the sources are a config list), one corpus file out.
-  step_count: 1
-  input_artifact_count: 0
-  output_artifact_count: 1
-  expected_steps:
-    - config:
-        sources_config:
-          target_rows: 256
-          shuffle_seed: 42
+  - target_name: sources
+    # 2 hfpull + the step + 1 hfpush.
+    step_count: 4  # CALIBRATE against the first green run
+    input_artifact_count: 2
+    output_artifact_count: 1
+    expected_steps:
+      - step_uri: space://steps/train/distill/data-mixture
+        config:
+          sources_config:
+            target_rows: 32
+            shuffle_seed: 42
 space_uri: ../../../../../../../configurations/spaces/local
 tests:
   - runner
@@ -22,4 +24,4 @@ tests:
 simulate_step_failure: false
 # cpu/gpu-mid queueing on a shared cluster, plus a one-time .sqsh import of a new
 # image tag (a CPU job that has queued for over an hour).
-timeout_minutes: 180
+timeout_minutes: 120

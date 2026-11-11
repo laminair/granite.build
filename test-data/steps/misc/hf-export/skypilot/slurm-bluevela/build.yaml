@@ -1,6 +1,8 @@
 # Build-test fixture for misc/hf-export on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_misc_hf_export.py and buildtest.yaml beside this file.
-# Plumbing scale: what SUCCESS proves is in the test's docstring.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
+# to a per-run private dataset the test verifies and then deletes.
 granite.build:
   name: slurm-bluevela-hf-export-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -10,13 +12,18 @@ granite.build:
     export:
       environment_uri: space://environments/skypilot/slurm/bluevela
       inputs:
-        # A real on-policy GOLD run (checkpoint-50 .. checkpoint-390). Only read.
+        # A logit-distill output dir from 2 ranks x 2 steps: checkpoint-1, checkpoint-2,
+        # each with ZeRO optimizer shards and per-rank rng_state files. Staged once.
         train_output:
-          uri: "env:///proj/granite-build/g4os/kd-sandbox/checkpoints/granite-4.1-3b-base_from-4.2-30b_onpolicy-multidomain_custom-1.0_node4"
+          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-hf-export"
+          type: model
+        # The tokenizer the run trained with, so the export can assert it ships that one.
+        expected_tokenizer:
+          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-retagged/main/retagged_student"
           type: model
       outputs:
         hf_model:
-          uri: "env://{{ binding.path }}"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-hf-export___GBTEST_HF_PUSH_RUN__"
           type: model
       steps:
         - step_uri: space://steps/misc/hf-export
@@ -36,56 +43,11 @@ granite.build:
               sbatch_options:
                 constraint: null
             export_config:
-              # The SAME absolute dest for both targets: that is what makes the
-              # second one a resume-marker skip rather than a second export.
-              dest: "/proj/granite-build/g4os/gbtest/distill/buildtest/hf-export/{{ run_metadata.build_id }}/export"
-              # Named, so a run being extended cannot change which checkpoint ships.
-              checkpoint: "checkpoint-50"
+              dest: "export"
+              # Named, so the test always ships the same checkpoint.
+              checkpoint: "checkpoint-1"
               padding_side: "right"
               verify: true
-              # This multi-node checkpoint carries per-rank rng_state files the
-              # classifier does not list; the step's own default stays false.
-              allow_unknown: true
-
-    export-again:
-      environment_uri: space://environments/skypilot/slurm/bluevela
-      inputs:
-        # A real on-policy GOLD run (checkpoint-50 .. checkpoint-390). Only read.
-        train_output:
-          uri: "env:///proj/granite-build/g4os/kd-sandbox/checkpoints/granite-4.1-3b-base_from-4.2-30b_onpolicy-multidomain_custom-1.0_node4"
-          type: model
-        # Ordering edge only: the second export must start after the first lands.
-        after:
-          binding: export.hf_model
-      outputs:
-        hf_model:
-          uri: "env://{{ binding.path }}"
-          type: model
-      steps:
-        - step_uri: space://steps/misc/hf-export
-          config:
-            poll_interval_seconds: 30
-            log_retrieval_interval_seconds: 30
-            compute_config:
-              num_nodes: 1
-              num_cpus_per_node: 4
-            launcher_config:
-              resources:
-                cluster: "bluevela"
-                # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
-                # h200 constraint has to go with it (null drops the directive).
-                zone: "cpu"
-                memory: 64
-              sbatch_options:
-                constraint: null
-            export_config:
-              # The SAME absolute dest for both targets: that is what makes the
-              # second one a resume-marker skip rather than a second export.
-              dest: "/proj/granite-build/g4os/gbtest/distill/buildtest/hf-export/{{ run_metadata.build_id }}/export"
-              # Named, so a run being extended cannot change which checkpoint ships.
-              checkpoint: "checkpoint-50"
-              padding_side: "right"
-              verify: true
-              # This multi-node checkpoint carries per-rank rng_state files the
-              # classifier does not list; the step's own default stays false.
+              # A multi-rank checkpoint carries per-rank rng_state files the classifier
+              # does not list; the step's own default stays false.
               allow_unknown: true

@@ -14,13 +14,22 @@
 
 """tokenizer-align end to end on IBM BlueVela SLURM.
 
-SUCCESS proves that the CPU image runs under Pyxis on BlueVela's cpu partition, the two overlays are
-built, the student is retagged, and all three artifacts register (an output the
-template failed to declare is dropped with no error, so the count is the point).
+SUCCESS proves that the CPU image retags the public granite-4.0-h-350m onto granite-4.1-3b's tokenizer,
+installs the generation chat template, passes its four post-conditions, and pushes
+all three artifacts (an output the template failed to declare is dropped with no
+error, so the count is the point).
+
+Inputs are the public granite models and PRIVATE
+``ibm-granite/gb-step-distillation-buildtest-inputs-*`` datasets, so the space's
+``HF_TOKEN`` must be able to read ``ibm-granite``.
+Outputs are pushed to per-run private datasets in ``GBTEST_HF_PUSH_ORG`` (set it to
+``ibm-granite``, where granitebuild may write), which the mixin checks landed and then
+deletes. That needs an ``HF_TOKEN`` that can write and delete there.
 
 Run it from the step directory::
 
-    GB_STEP_BLUEVELA_BUILD=1 make -C steps/train/distill/tokenizer-align/skypilot test TESTS=test/slurm-bluevela
+    GB_STEP_BLUEVELA_BUILD=1 GBTEST_HF_PUSH_ORG=ibm-granite \
+        make -C steps/train/distill/tokenizer-align/skypilot test TESTS=test/slurm-bluevela
 
 IBM infrastructure through the local space, so marked ``ibm`` and extended-only. It
 also needs an explicit opt-in: ``make test`` runs every test in the step directory, and
@@ -39,6 +48,7 @@ from libgbtest.buildrunner.buildtest import (
     get_test_data_dir_for,
 )
 from libgbtest.constants import extended_testing_only
+from libgbtest.hfpush import HfPushCleanupMixin
 
 pytestmark = [pytest.mark.skypilot_integration, pytest.mark.ibm]
 
@@ -63,7 +73,9 @@ _OPT_IN = "GB_STEP_BLUEVELA_BUILD"
     os.environ.get("RUNNING_IN_CICD", "False").lower() == "true",
     reason="No BlueVela SSH key on SPS CI/CD hosts",
 )
-class TestSkypilotSlurmBluevelaTrainDistillTokenizerAlign(AbstractYamlBuildRunnerTest):
+class TestSkypilotSlurmBluevelaTrainDistillTokenizerAlign(
+    HfPushCleanupMixin, AbstractYamlBuildRunnerTest
+):
     """tokenizer-align on BlueVela SLURM, via Pyxis."""
 
     def _get_yaml_spec_dir(self) -> Path:

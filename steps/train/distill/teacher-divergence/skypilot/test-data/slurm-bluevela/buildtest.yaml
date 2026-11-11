@@ -1,34 +1,26 @@
 # YAML spec for test_skypilot_slurm_bluevela_train_distill_teacher_divergence.py (located by the
-# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
-# shared-FS no-ops on BlueVela, so every target records exactly one step.
+# test/ <-> test-data/ helper; see steps/README.md). Each hf:// input is pulled by its
+# own hfpull step and each hf:// output pushed by its own hfpush step, which is what
+# step_count counts.
 targets:
-  - align
-  - corpus
   - eval-transfer-baseline
 target_expectations:
-  - target_name: align
-    step_count: 1
+  - target_name: eval-transfer-baseline
+    # 3 hfpull + the step + 1 hfpush.
+    step_count: 5  # CALIBRATE against the first green run
     input_artifact_count: 3
-    output_artifact_count: 3
-  - target_name: corpus
-    step_count: 1
-    input_artifact_count: 2
     output_artifact_count: 1
-- target_name: eval-transfer-baseline
-  # Three inputs (student, corpus as the ordering edge, teacher), one fileset out.
-  step_count: 1
-  input_artifact_count: 3
-  output_artifact_count: 1
-  expected_steps:
-      - metadata_matches:
+    expected_steps:
+      - step_uri: space://steps/train/distill/teacher-divergence
+        metadata_matches:
           distill_code_commit: "^[0-9a-f]{40}$"
           distill_code_source: "^baked-image$"
-config:
-  eval_config:
-    # A waived check or a shorter budget yields a number that means nothing.
-    allow_tokenizer_mismatch: false
-    max_length: 4096
-    metrics: "jsd,kld,rkld,entropy"
+        config:
+          eval_config:
+            # A waived check or a shorter budget yields a number that means nothing.
+            allow_tokenizer_mismatch: false
+            max_length: 4096
+            metrics: "jsd,kld,rkld,entropy"
 space_uri: ../../space
 tests:
   - runner

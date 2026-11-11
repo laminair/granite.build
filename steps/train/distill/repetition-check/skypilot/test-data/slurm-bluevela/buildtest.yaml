@@ -1,19 +1,21 @@
 # YAML spec for test_skypilot_slurm_bluevela_train_distill_repetition_check.py (located by the
-# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
-# shared-FS no-ops on BlueVela, so every target records exactly one step.
+# test/ <-> test-data/ helper; see steps/README.md). Each hf:// input is pulled by its
+# own hfpull step and each hf:// output pushed by its own hfpush step, which is what
+# step_count counts.
 targets:
   - gen-smoke
 target_expectations:
-- target_name: gen-smoke
-  # No named inputs (the rungs are a config list), one report out.
-  step_count: 1
-  input_artifact_count: 0
-  output_artifact_count: 1
-  expected_steps:
-    - config:
-        gen_smoke_config:
-          new_tokens: 64
-          gate_final_rung: false
+  - target_name: gen-smoke
+    # 1 hfpull + the step + 1 hfpush.
+    step_count: 3  # CALIBRATE against the first green run
+    input_artifact_count: 1
+    output_artifact_count: 1
+    expected_steps:
+      - step_uri: space://steps/train/distill/repetition-check
+        config:
+          gen_smoke_config:
+            new_tokens: 64
+            gate_final_rung: false
 space_uri: ../../space
 tests:
   - runner

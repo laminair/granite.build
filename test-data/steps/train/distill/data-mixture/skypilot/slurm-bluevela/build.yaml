@@ -1,6 +1,8 @@
 # Build-test fixture for data-mixture on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_data_mixture.py and buildtest.yaml beside this file.
-# Plumbing scale: what SUCCESS proves is in the test's docstring.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
+# to a per-run private dataset the test verifies and then deletes.
 granite.build:
   name: slurm-bluevela-data-mixture-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -9,9 +11,17 @@ granite.build:
   targets:
     sources:
       environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # Bound only to be pulled: sources_config.sources lists the pulled paths.
+        general:
+          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-data-mixture/main/general.jsonl"
+          type: dataset
+        tools:
+          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-data-mixture/main/tools.jsonl"
+          type: dataset
       outputs:
         corpus_source:
-          uri: "env://{{ binding.path }}"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-sources___GBTEST_HF_PUSH_RUN__"
           type: dataset
       steps:
         - step_uri: space://steps/train/distill/data-mixture
@@ -32,8 +42,8 @@ granite.build:
                 constraint: null
             sources_config:
               sources:
-                - "/proj/granite-build/g4os/datasets/ibm-granite--granite-4.0-sft-datasets-r260106a/tools/tools.jsonl"
-                - "/proj/granite-build/g4os/datasets/ibm-granite--granite-4.0-sft-datasets-r260106a/rag/rag.jsonl"
-              target_rows: 256
+                - "{{ bindings.general.binding.path }}"
+                - "{{ bindings.tools.binding.path }}"
+              target_rows: 32
               shuffle_seed: 42
-              output_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/data-mixture/{{ run_metadata.build_id }}/sources"
+              output_dir: "sources"
