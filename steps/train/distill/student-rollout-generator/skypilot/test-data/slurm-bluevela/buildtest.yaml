@@ -1,0 +1,30 @@
+# YAML spec for test_skypilot_slurm_bluevela_train_distill_student_rollout_generator.py (located by the
+# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
+# shared-FS no-ops on BlueVela, so every target records exactly one step.
+targets:
+  - vllm-server
+  - teardown
+target_expectations:
+- target_name: vllm-server
+  # One model in; the URL and the cluster name out, both mem:// values.
+  step_count: 1
+  input_artifact_count: 1
+  output_artifact_count: 2
+  expected_steps:
+    - config:
+        vllm_config:
+          max_model_len: 4096
+- target_name: teardown
+  # In-process launcher: provisions nothing, downs the service's cluster.
+  step_count: 1
+  input_artifact_count: 2
+  output_artifact_count: 0
+space_uri: ../../space
+tests:
+  - runner
+# No injected failure: a failed launch or workload fails the build, so SUCCESS is
+# itself the proof.
+simulate_step_failure: false
+# cpu/gpu-mid queueing on a shared cluster, plus a one-time .sqsh import of a new
+# image tag (a CPU job that has queued for over an hour).
+timeout_minutes: 120

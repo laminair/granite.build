@@ -1,0 +1,25 @@
+# YAML spec for test_skypilot_slurm_bluevela_train_distill_data_mixture.py (located by the
+# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
+# shared-FS no-ops on BlueVela, so every target records exactly one step.
+targets:
+  - sources
+target_expectations:
+- target_name: sources
+  # No named inputs (the sources are a config list), one corpus file out.
+  step_count: 1
+  input_artifact_count: 0
+  output_artifact_count: 1
+  expected_steps:
+    - config:
+        sources_config:
+          target_rows: 256
+          shuffle_seed: 42
+space_uri: ../../../../../../../configurations/spaces/local
+tests:
+  - runner
+# No injected failure: a failed launch or workload fails the build, so SUCCESS is
+# itself the proof.
+simulate_step_failure: false
+# cpu/gpu-mid queueing on a shared cluster, plus a one-time .sqsh import of a new
+# image tag (a CPU job that has queued for over an hour).
+timeout_minutes: 180

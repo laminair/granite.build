@@ -1,0 +1,57 @@
+# Build-test fixture for tokenizer-align on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_tokenizer_align.py and buildtest.yaml beside this file.
+# Plumbing scale: what SUCCESS proves is in the test's docstring.
+granite.build:
+  name: slurm-bluevela-tokenizer-align-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    align:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        teacher:
+          uri: "env:///proj/granite-build/g4os/models/granite-4.1-3b-pinned"
+          type: model
+        student:
+          uri: "env:///proj/granite-build/g4os/skypilot-test/sft/checkpoints/v0-20260529-20260529_212150-hf/epoch_hf_2"
+          type: model
+        # The granite-native template with a real {% generation %} block: without
+        # it prep cannot build assistant masks.
+        chat_template:
+          uri: "env:///proj/granite-build/g4os/chat_templates/granite_4_role_generation.jinja"
+          type: dataset
+      outputs:
+        retagged_student:
+          uri: "env://{{ binding.path }}"
+          type: model
+        teacher_overlay:
+          uri: "env://{{ binding.path }}"
+          type: model
+        student_overlay:
+          uri: "env://{{ binding.path }}"
+          type: model
+      steps:
+        - step_uri: space://steps/train/distill/tokenizer-align
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_cpus_per_node: 4
+            launcher_config:
+              resources:
+                cluster: "bluevela"
+                # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
+                # h200 constraint has to go with it (null drops the directive).
+                zone: "cpu"
+                memory: 32
+              sbatch_options:
+                constraint: null
+            align_config:
+              out_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/tokenizer-align/{{ run_metadata.build_id }}/align"
+              # False for this granite-4.x pair, which carries start_of_role/end_of_role
+              # and no im_start; safe only because the chat template is granite-native.
+              require_chatml: false
+              verify: true
+              dry_run: false

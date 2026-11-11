@@ -1,0 +1,91 @@
+# Build-test fixture for misc/hf-export on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_misc_hf_export.py and buildtest.yaml beside this file.
+# Plumbing scale: what SUCCESS proves is in the test's docstring.
+granite.build:
+  name: slurm-bluevela-hf-export-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    export:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # A real on-policy GOLD run (checkpoint-50 .. checkpoint-390). Only read.
+        train_output:
+          uri: "env:///proj/granite-build/g4os/kd-sandbox/checkpoints/granite-4.1-3b-base_from-4.2-30b_onpolicy-multidomain_custom-1.0_node4"
+          type: model
+      outputs:
+        hf_model:
+          uri: "env://{{ binding.path }}"
+          type: model
+      steps:
+        - step_uri: space://steps/misc/hf-export
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_cpus_per_node: 4
+            launcher_config:
+              resources:
+                cluster: "bluevela"
+                # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
+                # h200 constraint has to go with it (null drops the directive).
+                zone: "cpu"
+                memory: 64
+              sbatch_options:
+                constraint: null
+            export_config:
+              # The SAME absolute dest for both targets: that is what makes the
+              # second one a resume-marker skip rather than a second export.
+              dest: "/proj/granite-build/g4os/gbtest/distill/buildtest/hf-export/{{ run_metadata.build_id }}/export"
+              # Named, so a run being extended cannot change which checkpoint ships.
+              checkpoint: "checkpoint-50"
+              padding_side: "right"
+              verify: true
+              # This multi-node checkpoint carries per-rank rng_state files the
+              # classifier does not list; the step's own default stays false.
+              allow_unknown: true
+
+    export-again:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # A real on-policy GOLD run (checkpoint-50 .. checkpoint-390). Only read.
+        train_output:
+          uri: "env:///proj/granite-build/g4os/kd-sandbox/checkpoints/granite-4.1-3b-base_from-4.2-30b_onpolicy-multidomain_custom-1.0_node4"
+          type: model
+        # Ordering edge only: the second export must start after the first lands.
+        after:
+          binding: export.hf_model
+      outputs:
+        hf_model:
+          uri: "env://{{ binding.path }}"
+          type: model
+      steps:
+        - step_uri: space://steps/misc/hf-export
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_cpus_per_node: 4
+            launcher_config:
+              resources:
+                cluster: "bluevela"
+                # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
+                # h200 constraint has to go with it (null drops the directive).
+                zone: "cpu"
+                memory: 64
+              sbatch_options:
+                constraint: null
+            export_config:
+              # The SAME absolute dest for both targets: that is what makes the
+              # second one a resume-marker skip rather than a second export.
+              dest: "/proj/granite-build/g4os/gbtest/distill/buildtest/hf-export/{{ run_metadata.build_id }}/export"
+              # Named, so a run being extended cannot change which checkpoint ships.
+              checkpoint: "checkpoint-50"
+              padding_side: "right"
+              verify: true
+              # This multi-node checkpoint carries per-rank rng_state files the
+              # classifier does not list; the step's own default stays false.
+              allow_unknown: true

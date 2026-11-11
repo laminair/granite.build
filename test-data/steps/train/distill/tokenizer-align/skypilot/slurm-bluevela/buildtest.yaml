@@ -1,0 +1,30 @@
+# YAML spec for test_skypilot_slurm_bluevela_train_distill_tokenizer_align.py (located by the
+# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
+# shared-FS no-ops on BlueVela, so every target records exactly one step.
+targets:
+  - align
+target_expectations:
+- target_name: align
+  # Three inputs (teacher, student, chat_template), three overlays out.
+  step_count: 1
+  input_artifact_count: 3
+  output_artifact_count: 3
+  expected_steps:
+      - metadata_matches:
+          distill_code_commit: "^[0-9a-f]{40}$"
+          distill_code_source: "^baked-image$"
+config:
+  align_config:
+    # verify off would skip the post-condition; a dry run publishes nothing.
+    verify: true
+    dry_run: false
+    require_chatml: false
+space_uri: ../../../../../../../configurations/spaces/local
+tests:
+  - runner
+# No injected failure: a failed launch or workload fails the build, so SUCCESS is
+# itself the proof.
+simulate_step_failure: false
+# cpu/gpu-mid queueing on a shared cluster, plus a one-time .sqsh import of a new
+# image tag (a CPU job that has queued for over an hour).
+timeout_minutes: 180

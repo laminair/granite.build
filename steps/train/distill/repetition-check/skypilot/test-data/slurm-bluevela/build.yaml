@@ -1,0 +1,38 @@
+# Build-test fixture for repetition-check on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_repetition_check.py and buildtest.yaml beside this file.
+# Plumbing scale: what SUCCESS proves is in the test's docstring.
+granite.build:
+  name: slurm-bluevela-repetition-check-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    gen-smoke:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      outputs:
+        repetition_report:
+          uri: "env://{{ binding.path }}"
+          type: fileset
+      steps:
+        - step_uri: space://steps/train/distill/repetition-check
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_gpus_per_node: 1
+            launcher_config:
+              resources:
+                # accelerators is per node; H200 is what the env's constraint pins.
+                accelerators: "H200:1"
+                cluster: "bluevela"
+                zone: "gpu-mid"
+                memory: 256
+            gen_smoke_config:
+              rungs:
+                - "0:/proj/granite-build/g4os/skypilot-test/sft/checkpoints/v0-20260529-20260529_212150-hf/epoch_hf_2"
+              max_repetition: 0.15
+              new_tokens: 64
+              # The verdict is not the subject here; the run and the report are.
+              gate_final_rung: false
+              output_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/repetition-check/{{ run_metadata.build_id }}/gen-smoke"

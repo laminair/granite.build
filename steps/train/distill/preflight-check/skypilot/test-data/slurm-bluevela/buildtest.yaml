@@ -1,0 +1,24 @@
+# YAML spec for test_skypilot_slurm_bluevela_train_distill_preflight_check.py (located by the
+# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
+# shared-FS no-ops on BlueVela, so every target records exactly one step.
+targets:
+  - probe
+target_expectations:
+- target_name: probe
+  # A diagnostic against a literal path: no inputs, no outputs.
+  step_count: 1
+  input_artifact_count: 0
+  output_artifact_count: 0
+  expected_steps:
+    - config:
+        probe_config:
+          probe: load-student
+space_uri: ../../space
+tests:
+  - runner
+# No injected failure: a failed launch or workload fails the build, so SUCCESS is
+# itself the proof.
+simulate_step_failure: false
+# cpu/gpu-mid queueing on a shared cluster, plus a one-time .sqsh import of a new
+# image tag (a CPU job that has queued for over an hour).
+timeout_minutes: 120

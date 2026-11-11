@@ -1,0 +1,40 @@
+# YAML spec for test_skypilot_slurm_bluevela_train_distill_teacher_logits.py (located by the
+# test/ <-> test-data/ helper; see steps/README.md). env:// inputs and outputs are
+# shared-FS no-ops on BlueVela, so every target records exactly one step.
+targets:
+  - align
+  - corpus
+  - precompute
+target_expectations:
+  - target_name: align
+    step_count: 1
+    input_artifact_count: 3
+    output_artifact_count: 3
+  - target_name: corpus
+    step_count: 1
+    input_artifact_count: 2
+    output_artifact_count: 1
+- target_name: precompute
+  # Three inputs (corpus, teacher, teacher_tokenizer), one shard dir out.
+  step_count: 1
+  input_artifact_count: 3
+  output_artifact_count: 1
+  expected_steps:
+      - metadata_matches:
+          distill_code_commit: "^[0-9a-f]{40}$"
+          distill_code_source: "^baked-image$"
+config:
+  precompute_config:
+    max_length: 4096
+    allow_tokenizer_mismatch: false
+  workload:
+    gpus_per_node: 1
+space_uri: ../../../../../../../configurations/spaces/local
+tests:
+  - runner
+# No injected failure: a failed launch or workload fails the build, so SUCCESS is
+# itself the proof.
+simulate_step_failure: false
+# cpu/gpu-mid queueing on a shared cluster, plus a one-time .sqsh import of a new
+# image tag (a CPU job that has queued for over an hour).
+timeout_minutes: 240

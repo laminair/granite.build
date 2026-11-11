@@ -1,0 +1,57 @@
+# Build-test fixture for student-rollout-generator on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_student_rollout_generator.py and buildtest.yaml beside this file.
+# Plumbing scale: what SUCCESS proves is in the test's docstring.
+granite.build:
+  name: slurm-bluevela-student-rollout-generator-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    vllm-server:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        model:
+          uri: "env:///proj/granite-build/g4os/skypilot-test/sft/checkpoints/v0-20260529-20260529_212150-hf/epoch_hf_2"
+          type: model
+      outputs:
+        # Build-unique keys: an artifact URI another build already registered in
+        # the space is refused.
+        vllm_url:
+          uri: "mem://distill-rollout-buildtest-{{ run_metadata.build_id }}"
+        cluster_name:
+          uri: "mem://distill-rollout-buildtest-cluster-{{ run_metadata.build_id }}"
+      steps:
+        - step_uri: space://steps/train/distill/student-rollout-generator
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_gpus_per_node: 1
+            launcher_config:
+              resources:
+                # accelerators is per node; H200 is what the env's constraint pins.
+                accelerators: "H200:1"
+                cluster: "bluevela"
+                zone: "gpu-mid"
+                memory: 256
+            vllm_config:
+              port: 8001
+              max_model_len: 4096
+              health_timeout_seconds: 1800
+              # Safety net if teardown never fires.
+              max_lifetime_seconds: 2400
+
+    teardown:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        ready:
+          binding: vllm-server.vllm_url
+        vllm_cluster:
+          binding: vllm-server.cluster_name
+      steps:
+        - step_uri: space://steps/skypilot-teardown
+          config:
+            teardown_config:
+              cluster_names:
+                - "{{ bindings.vllm_cluster.binding.state }}"

@@ -1,0 +1,39 @@
+# Build-test fixture for data-mixture on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_data_mixture.py and buildtest.yaml beside this file.
+# Plumbing scale: what SUCCESS proves is in the test's docstring.
+granite.build:
+  name: slurm-bluevela-data-mixture-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    sources:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      outputs:
+        corpus_source:
+          uri: "env://{{ binding.path }}"
+          type: dataset
+      steps:
+        - step_uri: space://steps/train/distill/data-mixture
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_cpus_per_node: 4
+            launcher_config:
+              resources:
+                cluster: "bluevela"
+                # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
+                # h200 constraint has to go with it (null drops the directive).
+                zone: "cpu"
+                memory: 32
+              sbatch_options:
+                constraint: null
+            sources_config:
+              sources:
+                - "/proj/granite-build/g4os/datasets/ibm-granite--granite-4.0-sft-datasets-r260106a/tools/tools.jsonl"
+                - "/proj/granite-build/g4os/datasets/ibm-granite--granite-4.0-sft-datasets-r260106a/rag/rag.jsonl"
+              target_rows: 256
+              shuffle_seed: 42
+              output_dir: "/proj/granite-build/g4os/gbtest/distill/buildtest/data-mixture/{{ run_metadata.build_id }}/sources"
