@@ -1,8 +1,8 @@
 # Build-test fixture for data-mixture on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_data_mixture.py and buildtest.yaml beside this file.
 # Every input comes from the Hub (public granite models, or a PRIVATE
-# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
-# to a per-run private dataset the test verifies and then deletes.
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
 granite.build:
   name: slurm-bluevela-data-mixture-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -14,14 +14,14 @@ granite.build:
       inputs:
         # Bound only to be pulled: sources_config.sources lists the pulled paths.
         general:
-          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-data-mixture/main/general.jsonl"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-data-mixture/main/general.jsonl"
           type: dataset
         tools:
-          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-data-mixture/main/tools.jsonl"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-data-mixture/main/tools.jsonl"
           type: dataset
       outputs:
         corpus_source:
-          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-sources___GBTEST_HF_PUSH_RUN__"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-data-mixture-corpus-source___GBTEST_HF_PUSH_RUN__"
           type: dataset
       steps:
         - step_uri: space://steps/train/distill/data-mixture

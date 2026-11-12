@@ -1,8 +1,8 @@
 # Build-test fixture for teacher-divergence on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_teacher_divergence.py and buildtest.yaml beside this file.
 # Every input comes from the Hub (public granite models, or a PRIVATE
-# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
-# to a per-run private dataset the test verifies and then deletes.
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
 granite.build:
   name: slurm-bluevela-teacher-divergence-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -14,18 +14,18 @@ granite.build:
       inputs:
         # tokenizer-align's retagged student, staged once (see the repo's README).
         student:
-          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-retagged/main/retagged_student"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
           type: model
         # Bound only to be pulled: eval_config.corpus names the pulled path.
         eval_split:
-          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-corpus/main/eval.jsonl"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-corpus/main/eval.jsonl"
           type: dataset
         teacher:
           uri: "hf:///models/ibm-granite/granite-4.1-3b"
           type: model
       outputs:
         eval_metrics:
-          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-eval-metrics___GBTEST_HF_PUSH_RUN__"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-teacher-divergence-metrics___GBTEST_HF_PUSH_RUN__"
           type: fileset
       steps:
         - step_uri: space://steps/train/distill/teacher-divergence

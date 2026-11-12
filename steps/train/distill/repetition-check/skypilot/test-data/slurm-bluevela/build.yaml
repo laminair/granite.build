@@ -1,8 +1,8 @@
 # Build-test fixture for repetition-check on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_repetition_check.py and buildtest.yaml beside this file.
 # Every input comes from the Hub (public granite models, or a PRIVATE
-# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
-# to a per-run private dataset the test verifies and then deletes.
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
 granite.build:
   name: slurm-bluevela-repetition-check-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -18,7 +18,7 @@ granite.build:
           type: model
       outputs:
         repetition_report:
-          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-repetition-report___GBTEST_HF_PUSH_RUN__"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-repetition-check-report___GBTEST_HF_PUSH_RUN__"
           type: fileset
       steps:
         - step_uri: space://steps/train/distill/repetition-check

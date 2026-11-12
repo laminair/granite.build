@@ -1,8 +1,8 @@
 # Build-test fixture for student-rollout-generator on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_student_rollout_generator.py and buildtest.yaml beside this file.
 # Every input comes from the Hub (public granite models, or a PRIVATE
-# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
-# to a per-run private dataset the test verifies and then deletes.
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
 granite.build:
   name: slurm-bluevela-student-rollout-generator-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.

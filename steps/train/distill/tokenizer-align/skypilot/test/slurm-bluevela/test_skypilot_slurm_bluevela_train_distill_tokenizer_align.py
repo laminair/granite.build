@@ -20,10 +20,11 @@ all three artifacts (an output the template failed to declare is dropped with no
 error, so the count is the point).
 
 Inputs are the public granite models and PRIVATE
-``ibm-granite/gb-step-distillation-buildtest-inputs-*`` datasets, so the space's
+``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
-Outputs are pushed to per-run private datasets in ``GBTEST_HF_PUSH_ORG`` (set it to
-``ibm-granite``, where granitebuild may write), which the mixin checks landed and then
+Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in
+``GBTEST_HF_PUSH_ORG`` (set it to ``ibm-granite``, where granitebuild may write), which
+the mixin checks landed and then
 deletes. That needs an ``HF_TOKEN`` that can write and delete there.
 
 Run it from the step directory::

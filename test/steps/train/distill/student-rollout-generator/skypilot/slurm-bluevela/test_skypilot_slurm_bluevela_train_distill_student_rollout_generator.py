@@ -20,7 +20,7 @@ cluster once it is ready. A service has no file output, so the second target is
 part of the step's contract, not a prerequisite.
 
 Inputs are the public granite models and PRIVATE
-``ibm-granite/gb-step-distillation-buildtest-inputs-*`` datasets, so the space's
+``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Run it from the step directory::
 

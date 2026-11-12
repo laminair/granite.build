@@ -1,8 +1,8 @@
 # Build-test fixture for data-validate on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_data_validate.py and buildtest.yaml beside this file.
 # Every input comes from the Hub (public granite models, or a PRIVATE
-# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
-# to a per-run private dataset the test verifies and then deletes.
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
 granite.build:
   name: slurm-bluevela-data-validate-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -14,11 +14,11 @@ granite.build:
       inputs:
         # The whole staged corpus repo: manifest + train + eval.
         pinned_corpus:
-          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-corpus"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-corpus"
           type: dataset
         # tokenizer-align's retagged student, staged once (see the repo's README).
         tokenizer:
-          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-retagged/main/retagged_student"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
           type: model
         # Bound so the step can name the teacher the corpus was built against.
         teacher:
@@ -26,7 +26,7 @@ granite.build:
           type: model
       outputs:
         pin_check:
-          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-pin-check___GBTEST_HF_PUSH_RUN__"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-data-validate-pin-check___GBTEST_HF_PUSH_RUN__"
           type: fileset
       steps:
         - step_uri: space://steps/train/distill/data-validate

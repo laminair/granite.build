@@ -1,8 +1,8 @@
 # Build-test fixture for data-prep on BlueVela SLURM; paired with
 # test_skypilot_slurm_bluevela_train_distill_data_prep.py and buildtest.yaml beside this file.
 # Every input comes from the Hub (public granite models, or a PRIVATE
-# ibm-granite/gb-step-distillation-buildtest-inputs-* repo); every output is pushed
-# to a per-run private dataset the test verifies and then deletes.
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
 granite.build:
   name: slurm-bluevela-data-prep-buildtest
   # A failure here is final: a retry would only hide a flaky launch path.
@@ -14,15 +14,15 @@ granite.build:
       inputs:
         # tokenizer-align's retagged student, staged once (see the repo's README).
         tokenizer:
-          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-retagged/main/retagged_student"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
           type: model
         # 64 short conversations from public smoltalk (see the repo's README).
         source_dataset:
-          uri: "hf:///datasets/ibm-granite/gb-step-distillation-buildtest-inputs-data-prep/main/prep_input.jsonl"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-data-prep/main/prep_input.jsonl"
           type: dataset
       outputs:
         corpus:
-          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-distillation-buildtest-corpus___GBTEST_HF_PUSH_RUN__"
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-data-prep-corpus___GBTEST_HF_PUSH_RUN__"
           type: dataset
       steps:
         - step_uri: space://steps/train/distill/data-prep

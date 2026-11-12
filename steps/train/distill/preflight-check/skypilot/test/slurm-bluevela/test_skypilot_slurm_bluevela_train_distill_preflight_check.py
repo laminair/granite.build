@@ -18,7 +18,7 @@ SUCCESS proves that the load-student probe loads the public granite-4.0-h-350m (
 the GPU image on an H200 and prints its verdict.
 
 Inputs are the public granite models and PRIVATE
-``ibm-granite/gb-step-distillation-buildtest-inputs-*`` datasets, so the space's
+``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Run it from the step directory::
 
