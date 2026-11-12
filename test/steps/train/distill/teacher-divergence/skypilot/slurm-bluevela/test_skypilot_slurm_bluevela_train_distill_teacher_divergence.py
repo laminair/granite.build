@@ -14,11 +14,11 @@
 
 """teacher-divergence end to end on IBM BlueVela SLURM.
 
-SUCCESS proves that the retagged student and granite-4.1-3b both load on one H200, the tokenizer
+SUCCESS proves that the retagged student and the pinned granite-4.1-3b both load on one H200, the tokenizer
 consistency check passes rather than being waived, all four metrics come back from
 one forward pass over 8 rows of the staged eval split, and the metrics are pushed.
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in

@@ -18,7 +18,7 @@ SUCCESS proves that two unequal splits (40 + 8 rows) are counted, sampled propor
 (the larger one carries `conversations`, which prep would drop), and one 32-row
 corpus file is pushed.
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in

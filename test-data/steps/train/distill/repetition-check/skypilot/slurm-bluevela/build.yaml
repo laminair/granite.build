@@ -14,7 +14,7 @@ granite.build:
       inputs:
         # Bound only to be pulled: the rung below names the pulled path.
         rung:
-          uri: "hf:///models/ibm-granite/granite-4.0-h-350m"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
           type: model
       outputs:
         repetition_report:

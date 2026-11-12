@@ -12,8 +12,9 @@ granite.build:
     align:
       environment_uri: space://environments/skypilot/slurm/bluevela
       inputs:
+        # granite-4.1-3b with tokenizer_class pinned (see the repo's README).
         teacher:
-          uri: "hf:///models/ibm-granite/granite-4.1-3b"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-teacher"
           type: model
         student:
           uri: "hf:///models/ibm-granite/granite-4.0-h-350m"

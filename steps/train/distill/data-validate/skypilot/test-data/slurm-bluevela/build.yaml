@@ -22,7 +22,7 @@ granite.build:
           type: model
         # Bound so the step can name the teacher the corpus was built against.
         teacher:
-          uri: "hf:///models/ibm-granite/granite-4.1-3b"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-teacher"
           type: model
       outputs:
         pin_check:

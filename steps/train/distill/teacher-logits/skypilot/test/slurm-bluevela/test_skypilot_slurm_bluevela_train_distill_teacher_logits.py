@@ -14,11 +14,11 @@
 
 """teacher-logits end to end on IBM BlueVela SLURM.
 
-SUCCESS proves that granite-4.1-3b loads in the GPU image, its top-K logits come back for the staged
+SUCCESS proves that the pinned granite-4.1-3b loads in the GPU image, its top-K logits come back for the staged
 corpus (at most half skipped), and the shard directory is pushed. The teacher's
 tokenizer is the staged teacher overlay, so the consistency check runs.
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in

@@ -18,7 +18,7 @@ SUCCESS proves that the step's own CPU image selects a named checkpoint out of a
 run of the trainer this repo ships (staged once), leaves the optimizer, scheduler
 and RNG state behind, loads the result, and pushes it.
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in

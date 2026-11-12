@@ -18,7 +18,7 @@ SUCCESS proves that a staged corpus is accepted against its own manifest after a
 tokenizer identity, length budget, think/documents policy and eval fraction. The
 refusal paths are covered offline by test_check_corpus_pin.py.
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in

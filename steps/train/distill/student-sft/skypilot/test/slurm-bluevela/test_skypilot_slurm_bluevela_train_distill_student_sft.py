@@ -18,7 +18,7 @@ SUCCESS proves that accelerate + DeepSpeed ZeRO-3 come up in the GPU image on an
 matches the allocation, one epoch over the staged 48-row corpus trains, and the
 checkpoint is pushed.
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in

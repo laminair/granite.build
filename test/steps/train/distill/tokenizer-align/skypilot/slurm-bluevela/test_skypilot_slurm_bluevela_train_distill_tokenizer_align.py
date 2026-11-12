@@ -14,12 +14,13 @@
 
 """tokenizer-align end to end on IBM BlueVela SLURM.
 
-SUCCESS proves that the CPU image retags the public granite-4.0-h-350m onto granite-4.1-3b's tokenizer,
+SUCCESS proves that the CPU image retags the public granite-4.0-h-350m onto the pinned granite-4.1-3b's
+tokenizer,
 installs the generation chat template, passes its four post-conditions, and pushes
 all three artifacts (an output the template failed to declare is dropped with no
 error, so the count is the point).
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in

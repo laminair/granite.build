@@ -16,8 +16,9 @@ granite.build:
         corpus:
           uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-corpus/main/train.jsonl"
           type: dataset
+        # granite-4.1-3b with tokenizer_class pinned (see the repo's README).
         teacher:
-          uri: "hf:///models/ibm-granite/granite-4.1-3b"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-teacher"
           type: model
         teacher_tokenizer:
           uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/teacher_overlay"

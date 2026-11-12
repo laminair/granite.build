@@ -14,7 +14,7 @@ granite.build:
       inputs:
         # Bound only to be pulled: probe_config.checkpoint names the pulled path.
         student:
-          uri: "hf:///models/ibm-granite/granite-4.0-h-350m"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
           type: model
       steps:
         - step_uri: space://steps/train/distill/preflight-check

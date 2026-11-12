@@ -16,9 +16,9 @@
 
 SUCCESS proves that the GOLD trainer runs two data-parallel ranks under DeepSpeed ZeRO-3 in the GPU
 image, the in-container GPU check sees both GPUs (#604), two optimizer steps train
-the retagged 350m against granite-4.1-3b, and rank 0 pushes the checkpoint.
+the retagged 350m against the pinned granite-4.1-3b, and rank 0 pushes the checkpoint.
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in

@@ -14,10 +14,10 @@
 
 """repetition-check end to end on IBM BlueVela SLURM.
 
-SUCCESS proves that the GPU image greedy-decodes the eight prompts from an HF checkpoint (the public
-350m) and pushes the repetition report.
+SUCCESS proves that the GPU image greedy-decodes the eight prompts from the retagged student and pushes
+the repetition report.
 
-Inputs are the public granite models and PRIVATE
+Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
 ``HF_TOKEN`` must be able to read ``ibm-granite``.
 Outputs are pushed to per-run private ``gb-step-*-buildtest-output-*`` datasets in
