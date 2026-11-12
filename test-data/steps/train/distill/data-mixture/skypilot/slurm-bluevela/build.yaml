@@ -23,6 +23,10 @@ granite.build:
         corpus_source:
           uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-data-mixture-corpus-source___GBTEST_HF_PUSH_RUN__"
           type: dataset
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
       steps:
         - step_uri: space://steps/train/distill/data-mixture
           config:

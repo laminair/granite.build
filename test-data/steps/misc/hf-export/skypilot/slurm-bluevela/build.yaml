@@ -25,6 +25,10 @@ granite.build:
         hf_model:
           uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-aux-buildtest-output-hf-export-hf-model___GBTEST_HF_PUSH_RUN__"
           type: model
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
       steps:
         - step_uri: space://steps/misc/hf-export
           config:

@@ -20,6 +20,10 @@ granite.build:
         repetition_report:
           uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-repetition-check-report___GBTEST_HF_PUSH_RUN__"
           type: fileset
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
       steps:
         - step_uri: space://steps/train/distill/repetition-check
           config:

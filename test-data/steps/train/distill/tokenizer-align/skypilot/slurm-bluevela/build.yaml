@@ -27,12 +27,24 @@ granite.build:
         retagged_student:
           uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-tokenizer-align-retagged-student___GBTEST_HF_PUSH_RUN__"
           type: model
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
         teacher_overlay:
           uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-tokenizer-align-teacher-overlay___GBTEST_HF_PUSH_RUN__"
           type: model
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
         student_overlay:
           uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-tokenizer-align-student-overlay___GBTEST_HF_PUSH_RUN__"
           type: model
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
       steps:
         - step_uri: space://steps/train/distill/tokenizer-align
           config:
