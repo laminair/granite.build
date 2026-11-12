@@ -12,9 +12,9 @@ granite.build:
     gen-smoke:
       environment_uri: space://environments/skypilot/slurm/bluevela
       inputs:
-        # Bound only to be pulled: the rung below names the pulled path.
+        # The DENSE pinned teacher, not the hybrid student: this step runs with HF_HUB_OFFLINE=1, and a granitemoehybrid load fetches Hub kernels the offline mode forbids. Bound only to be pulled: the rung below names the pulled path.
         rung:
-          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-teacher"
           type: model
       outputs:
         repetition_report:

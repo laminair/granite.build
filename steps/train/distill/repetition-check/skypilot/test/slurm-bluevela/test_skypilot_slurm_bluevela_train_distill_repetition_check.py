@@ -14,8 +14,8 @@
 
 """repetition-check end to end on IBM BlueVela SLURM.
 
-SUCCESS proves that the GPU image greedy-decodes the eight prompts from the retagged student and pushes
-the repetition report.
+SUCCESS proves that the GPU image greedy-decodes the eight prompts from the pinned teacher (dense;
+see the build.yaml for why not the hybrid student) and pushes the repetition report.
 
 Inputs are PRIVATE
 ``ibm-granite/gb-step-*-buildtest-inputs-*`` datasets, so the space's
