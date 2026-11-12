@@ -11,14 +11,14 @@ target_expectations:
     input_artifact_count: 2
     output_artifact_count: 1
     expected_steps:
-      - step_uri: space://steps/misc/hf-export
+      - step_uri: space://steps/aux/hf-export
         config:
           export_config:
             checkpoint: "checkpoint-1"
             padding_side: "right"
             verify: true
             allow_unknown: true
-space_uri: ../../../../../../configurations/spaces/local
+space_uri: ../../space
 tests:
   - runner
 # No injected failure: a failed launch or workload fails the build, so SUCCESS is

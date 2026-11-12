@@ -14,7 +14,7 @@
 #
 # Shared CPU image for the distillation steps that do text/data processing
 # only, no GPU (data-validate, data-prep, data-mixture, tokenizer-align).
-# hf-export moved to steps/misc/ with its own image.
+# hf-export moved to steps/aux/ with its own image.
 # See steps/train/distill/images/gpu/Dockerfile for the GPU
 # sibling and the shared rationale (one image per resource class, not one
 # per step -- checked directly against each step's own pyproject.toml, not

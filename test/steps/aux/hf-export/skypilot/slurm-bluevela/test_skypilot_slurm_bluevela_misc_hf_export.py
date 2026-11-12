@@ -29,7 +29,7 @@ deletes. That needs an ``HF_TOKEN`` that can write and delete there.
 Run it from the step directory::
 
     GB_STEP_BLUEVELA_BUILD=1 GBTEST_HF_PUSH_ORG=ibm-granite \
-        make -C steps/misc/hf-export/skypilot test TESTS=test/slurm-bluevela
+        make -C steps/aux/hf-export/skypilot test TESTS=test/slurm-bluevela
 
 IBM infrastructure through the local space, so marked ``ibm`` and extended-only. It
 also needs an explicit opt-in: ``make test`` runs every test in the step directory, and
