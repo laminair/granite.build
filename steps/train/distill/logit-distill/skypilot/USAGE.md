@@ -399,7 +399,7 @@ it silently becomes a different arm.
 |---|---|---|
 | `jsd` | mixture generalized JSD; `beta` 0.0 = forward KL, 1.0 = reverse KL | — |
 | `kl_interpolation` | convex `(1-beta)*FKL + beta*RKL` | `0 < beta < 1` (else identical to `jsd`) |
-| `adaptive_kld` | adaptive KL divergence weighting | — |
+| ~~`adaptive_kld`~~ | ~~adaptive KL divergence weighting~~ **refused**: the vendored implementation does not compute the paper's objective (arXiv 2404.02657) — see `REJECTED_LOSS_ARMS` in `render_gold_config.py` | render fails |
 | `liger_fused_jsd` | same JSD math via Liger's fused kernel; lower peak memory | — |
 | `liger_fused_kl_interpolation` | fused kernel computing the convex FKL/RKL interpolation | `0 < beta < 1` |
 | `distillm2` | DistiLLM-2, comparative: reverse KL on on-policy tokens, forward KL off | `0 < lmbda < 1` |
@@ -617,3 +617,12 @@ so an external server means a NCCL process group spanning two allocations. This 
 tensors synced across the two allocations) and has **not yet run on SLURM**. The renderer refuses the `vllm` input with `vllm_num_servers: 0` (the run
 would train off-policy while a server sat idle) or with `lmbda: 0` (the student would never
 generate).
+
+## Running as root
+
+The shared images default to `DISTILL_UID=0` (root). On SLURM/enroot this preserves
+the validated cluster behaviour: the containers run against group-shared filesystems
+and a shared HF cache whose group membership a fixed uid cannot assume. On Kubernetes
+or plain docker, where running as root is the actual exposure, pass
+`--build-arg DISTILL_UID=1000` at image build time, or set `securityContext.runAsUser`
+in the pod spec. See each image's Dockerfile for the argument.
