@@ -4,7 +4,7 @@
 # Runs align -> corpus -> eval-transfer-baseline on the SkyPilot LSF/BlueVela environment.
 # Three targets because this step's two data inputs are both produced by the pipeline: the
 # student must be a retagged model whose tokenizer agrees with the teacher's, and the corpus
-# must be an EVAL SPLIT that corpus-prep writes.
+# must be an EVAL SPLIT that data-prep writes.
 #
 # What only a real run can show: that both models loaded on a GPU, that the tokenizer
 # consistency check passed rather than being waived, and that all four metrics came back
@@ -33,8 +33,7 @@ target_expectations:
     expected_steps:
       - metadata_matches:
           distill_code_commit: "^[0-9a-f]{40}$"
-          distill_code_source: "^(filesystem|git)$"
-          distill_code_dirty: "^[0-9]+$"
+          distill_code_source: "^baked-image$"
         config:
           eval_config:
             # Pin the settings whose wrong value produces a NUMBER THAT MEANS NOTHING

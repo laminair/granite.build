@@ -1,0 +1,60 @@
+# Build-test fixture for teacher-divergence on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_teacher_divergence.py and buildtest.yaml beside this file.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
+granite.build:
+  name: slurm-bluevela-teacher-divergence-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    eval-transfer-baseline:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # tokenizer-align's retagged student, staged once (see the repo's README).
+        student:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
+          type: model
+        # Bound only to be pulled: eval_config.corpus names the pulled path.
+        eval_split:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-corpus/main/eval.jsonl"
+          type: dataset
+        # granite-4.1-3b with tokenizer_class pinned (see the repo's README).
+        teacher:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-teacher"
+          type: model
+      outputs:
+        eval_metrics:
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-teacher-divergence-metrics___GBTEST_HF_PUSH_RUN__"
+          type: fileset
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
+      steps:
+        - step_uri: space://steps/train/distill/teacher-divergence
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_gpus_per_node: 1
+            launcher_config:
+              resources:
+                # accelerators is per node; H200 is what the env's constraint pins.
+                accelerators: "H200:1"
+                cluster: "bluevela"
+                zone: "gpu-mid"
+                memory: 256
+            eval_config:
+              corpus: "{{ bindings.eval_split.binding.path }}"
+              output_dir: "eval"
+              metrics: "jsd,kld,rkld,entropy"
+              max_samples: 8
+              seed: 42
+              max_length: 4096
+              max_incomplete_fraction: 0.25
+              batch_size: 4
+              dtype: "bfloat16"
+              allow_tokenizer_mismatch: false

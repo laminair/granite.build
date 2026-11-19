@@ -2,7 +2,7 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
-"""Integration test: distill-eval runs end to end on Skypilot/LSF.
+"""Integration test: teacher-divergence runs end to end on Skypilot/LSF.
 
 A **step-level** test, beside the step's Makefile in a per-cluster subdir with its
 fixtures in the matching ``test-data/lsf/``. Run it from the step directory::
@@ -45,8 +45,8 @@ _BV_KEY = os.environ.get("BV_SSH_KEY", "~/.ssh/ibm-bluevela.key")
 # Opt-in switch for the cluster run. `make test` in the step directory invokes
 # pytest with no marker filter, so without this a routine `make test` would
 # submit a real LSF job to a shared cluster — costly to other users and easy to
-# abandon half-scheduled. The offline tests (test_step_template.py, plus the
-# ported test_divergence.py when a checkout is present) cover the step's
+# abandon half-scheduled. The offline tests (test_step_template.py and the
+# ported test_divergence.py) cover the step's
 # contracts and always run; this one is deliberate:
 #
 #     GB_STEP_BLUEVELA_BUILD=1 make -C steps/train/distill/teacher-divergence/skypilot test

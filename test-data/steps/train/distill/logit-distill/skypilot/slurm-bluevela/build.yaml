@@ -1,0 +1,75 @@
+# Build-test fixture for logit-distill on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_logit_distill.py and buildtest.yaml beside this file.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
+granite.build:
+  name: slurm-bluevela-logit-distill-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    train-gold:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # tokenizer-align's retagged student, staged once (see the repo's README).
+        student:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
+          type: model
+        # data-prep's 48-row train split, staged once with the retagged student's tokenizer.
+        corpus:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-corpus/main/train.jsonl"
+          type: dataset
+        # granite-4.1-3b with tokenizer_class pinned (see the repo's README).
+        teacher:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-teacher"
+          type: model
+      outputs:
+        checkpoint:
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-logit-distill-checkpoint___GBTEST_HF_PUSH_RUN__"
+          type: model
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
+      steps:
+        - step_uri: space://steps/train/distill/logit-distill
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_gpus_per_node: 2
+            launcher_config:
+              resources:
+                # accelerators is per node; H200 is what the env's constraint pins.
+                accelerators: "H200:2"
+                cluster: "bluevela"
+                zone: "gpu-mid"
+                memory: 256
+            gold_config:
+              run_name: "buildtest"
+              ds_config: "configs/deepspeed/accelerate_deepspeed_zero3.yaml"
+              num_train_epochs: 1.0
+              max_steps: 2
+              learning_rate: 2.0e-06
+              min_lr: 2.0e-07
+              warmup_ratio: 0.05
+              lr_scheduler_type: "cosine_with_min_lr"
+              per_device_train_batch_size: 1
+              gradient_accumulation_steps: 1
+              max_length: 4096
+              max_completion_length: 1024
+              gradient_checkpointing: true
+              save_strategy: "steps"
+              # One save, at the last step: rank 0's publication is exercised once.
+              save_steps: 2
+              save_total_limit: 1
+              logging_steps: 1
+              dataset_num_proc: 8
+              temperature: 1.0
+              lmbda: 0.0
+              beta: 0.5
+              use_liger_fused_jsd: false
+              response_template: "<|start_of_role|>assistant<|end_of_role|>"
+              vllm_num_servers: 0

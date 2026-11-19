@@ -1,0 +1,36 @@
+# Build-test fixture for preflight-check on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_preflight_check.py and buildtest.yaml beside this file.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
+granite.build:
+  name: slurm-bluevela-preflight-check-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    probe:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # Bound only to be pulled: probe_config.checkpoint names the pulled path.
+        student:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
+          type: model
+      steps:
+        - step_uri: space://steps/train/distill/preflight-check
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_gpus_per_node: 1
+            launcher_config:
+              resources:
+                # accelerators is per node; H200 is what the env's constraint pins.
+                accelerators: "H200:1"
+                cluster: "bluevela"
+                zone: "gpu-mid"
+                memory: 256
+            probe_config:
+              probe: load-student
+              checkpoint: "{{ bindings.student.binding.path }}"

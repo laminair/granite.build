@@ -1,0 +1,66 @@
+# Build-test fixture for student-sft on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_student_sft.py and buildtest.yaml beside this file.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
+granite.build:
+  name: slurm-bluevela-student-sft-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    train-sft:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # tokenizer-align's retagged student, staged once (see the repo's README).
+        student:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
+          type: model
+        # data-prep's 48-row train split, staged once with the retagged student's tokenizer.
+        corpus:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-corpus/main/train.jsonl"
+          type: dataset
+      outputs:
+        checkpoint:
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-student-sft-checkpoint___GBTEST_HF_PUSH_RUN__"
+          type: model
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
+      steps:
+        - step_uri: space://steps/train/distill/student-sft
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_gpus_per_node: 1
+            launcher_config:
+              resources:
+                # accelerators is per node; H200 is what the env's constraint pins.
+                accelerators: "H200:1"
+                cluster: "bluevela"
+                zone: "gpu-mid"
+                memory: 256
+            workload:
+              # Must match the allocation: run-sft.sh asserts it against the visible GPUs.
+              gpus_per_node: 1
+              nodes: 1
+            sft_config:
+              output_dir: "train-sft"
+              response_template: "<|start_of_role|>assistant<|end_of_role|>"
+              max_length: 4096
+              per_device_train_batch_size: 1
+              gradient_accumulation_steps: 8
+              learning_rate: "1.0e-05"
+              num_train_epochs: 1
+              # One save at the end of the 6-step epoch: publication is exercised
+              # without paying for six checkpoint uploads.
+              save_steps: 6
+              seed: 42
+              # The whole corpus: sft.py checks its row count against prep's manifest.
+              max_dataset_size: -1
+              extra_config_yaml: "logging_steps: 1"
+              # Empty: a plain-SFT pass, not a forward-KL distillation arm.
+              precomputed_logits_dir: ""

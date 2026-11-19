@@ -1,0 +1,57 @@
+# Build-test fixture for teacher-logits on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_teacher_logits.py and buildtest.yaml beside this file.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
+granite.build:
+  name: slurm-bluevela-teacher-logits-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    precompute:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # data-prep's 48-row train split, staged once with the retagged student's tokenizer.
+        corpus:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-corpus/main/train.jsonl"
+          type: dataset
+        # granite-4.1-3b with tokenizer_class pinned (see the repo's README).
+        teacher:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-teacher"
+          type: model
+        teacher_tokenizer:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/teacher_overlay"
+          type: model
+      outputs:
+        teacher_logits:
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-teacher-logits-logits___GBTEST_HF_PUSH_RUN__"
+          type: fileset
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
+      steps:
+        - step_uri: space://steps/train/distill/teacher-logits
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_gpus_per_node: 1
+            launcher_config:
+              resources:
+                # accelerators is per node; H200 is what the env's constraint pins.
+                accelerators: "H200:1"
+                cluster: "bluevela"
+                zone: "gpu-mid"
+                memory: 256
+            workload:
+              gpus_per_node: 1
+              nodes: 1
+            precompute_config:
+              output_dir: "precompute"
+              max_length: 4096
+              response_template: "<|start_of_role|>assistant<|end_of_role|>"
+              max_skip_fraction: 0.5
+              allow_tokenizer_mismatch: false

@@ -1,0 +1,59 @@
+# Build-test fixture for data-prep on BlueVela SLURM; paired with
+# test_skypilot_slurm_bluevela_train_distill_data_prep.py and buildtest.yaml beside this file.
+# Every input comes from the Hub (public granite models, or a PRIVATE
+# ibm-granite/gb-step-*-buildtest-inputs-* repo); every output is pushed to a
+# per-run private gb-step-*-buildtest-output-* dataset the test verifies and deletes.
+granite.build:
+  name: slurm-bluevela-data-prep-buildtest
+  # A failure here is final: a retry would only hide a flaky launch path.
+  retries:
+    max_retries: 0
+  targets:
+    corpus:
+      environment_uri: space://environments/skypilot/slurm/bluevela
+      inputs:
+        # tokenizer-align's retagged student, staged once (see the repo's README).
+        tokenizer:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-shared-retagged/main/retagged_student"
+          type: model
+        # 64 short conversations from public smoltalk (see the repo's README).
+        source_dataset:
+          uri: "hf:///datasets/ibm-granite/gb-step-train-distill-buildtest-inputs-data-prep/main/prep_input.jsonl"
+          type: dataset
+      outputs:
+        corpus:
+          uri: "hf://huggingface.co/datasets/__GBTEST_HF_PUSH_ORG__/gb-step-train-distill-buildtest-output-data-prep-corpus___GBTEST_HF_PUSH_RUN__"
+          type: dataset
+          store_push:
+            config:
+              hf:
+                use_resource_group: false
+      steps:
+        - step_uri: space://steps/train/distill/data-prep
+          config:
+            poll_interval_seconds: 30
+            log_retrieval_interval_seconds: 30
+            compute_config:
+              num_nodes: 1
+              num_cpus_per_node: 4
+            launcher_config:
+              resources:
+                cluster: "bluevela"
+                # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
+                # h200 constraint has to go with it (null drops the directive).
+                zone: "cpu"
+                memory: 32
+              sbatch_options:
+                constraint: null
+            corpus_config:
+              out_dir: "corpus"
+              max_length: 4096
+              think_policy: "keep"
+              completion_boundary: "last_message"
+              # Above zero: the eval split is part of what is checked.
+              eval_fraction: 0.25
+              max_examples: 64
+              emit_row_id: true
+              # keep: the granite 4.x template renders documents into the system turn.
+              documents_policy: "keep"
+              seed: 42
