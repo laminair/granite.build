@@ -43,7 +43,12 @@ granite.build:
                 # BlueVela's CPU lane: gpu-mid refuses a GPU-less job, and the env-wide
                 # h200 constraint has to go with it (null drops the directive).
                 zone: "cpu"
-                memory: 64
+                # The cpu partition caps memory at 8 GB per CPU (MaxMemPerCPU=8192), so
+                # 4 CPUs allow at most 32 GB. Asking for more makes Slurm raise the job to
+                # more CPUs than requested, and srun then aborts on the mismatch
+                # (SLURM_CPUS_PER_TASK=8 != SLURM_TRES_PER_TASK=cpu=4) a second after
+                # allocation; at 64 this export never once ran (87 failures, Nov 10-23).
+                memory: 32
               sbatch_options:
                 constraint: null
             export_config:
